@@ -63,11 +63,22 @@
         "Data Science",
         "Machine Learning"
     ],
+    "extensionDependencies": [
+        "mengzhiya.vscode-supervisor"
+    ],
     "activationEvents": [
+        "onStartupFinished",
         "onDebugInitialConfigurations",
         "onLanguage:python",
         "onDebugResolve:python",
         "onCommand:python.copilotSetupTests",
+        "onCommand:python.execInConsole",
+        "onCommand:python.executeSelectionInSupervisor",
+        "onCommand:python.executeSelectionInSupervisorWithoutAdvancing",
+        "onCommand:python.selectSupervisorRuntime",
+        "onCommand:python.restartSupervisorConsole",
+        "onCommand:python.startSupervisorConsole",
+        "onCommand:python.stopSupervisorConsole",
         "workspaceContains:mspythonconfig.json",
         "workspaceContains:pyproject.toml",
         "workspaceContains:Pipfile",
@@ -315,6 +326,11 @@
             },
             {
                 "category": "Python",
+                "command": "python.execInConsole",
+                "title": "Run Python File in Console"
+            },
+            {
+                "category": "Python",
                 "command": "python.execInTerminal",
                 "title": "%python.command.python.execInTerminal.title%"
             },
@@ -371,6 +387,26 @@
                 "category": "Python",
                 "command": "python.startNativeREPL",
                 "title": "%python.command.python.startNativeREPL.title%"
+            },
+            {
+                "category": "Python",
+                "command": "python.selectSupervisorRuntime",
+                "title": "Select Supervisor Runtime"
+            },
+            {
+                "category": "Python",
+                "command": "python.restartSupervisorConsole",
+                "title": "Restart Supervisor Console"
+            },
+            {
+                "category": "Python",
+                "command": "python.startSupervisorConsole",
+                "title": "Start Supervisor Console"
+            },
+            {
+                "category": "Python",
+                "command": "python.stopSupervisorConsole",
+                "title": "Stop Supervisor Console"
             },
             {
                 "category": "Python",
@@ -437,6 +473,12 @@
                 "python.defaultInterpreterPath": {
                     "default": "python",
                     "markdownDescription": "%python.defaultInterpreterPath.description%",
+                    "scope": "machine-overridable",
+                    "type": "string"
+                },
+                "python.supervisor.apkPath": {
+                    "default": "",
+                    "description": "Path to the apk binary used for supervisor-backed Python runtimes. Leave empty to auto-detect a local build or PATH entry.",
                     "scope": "machine-overridable",
                     "type": "string"
                 },
@@ -1156,6 +1198,17 @@
                 "when": "editorTextFocus && editorLangId == python && !findInputFocussed && !replaceInputFocussed && !jupyter.ownsSelection && !notebookEditorFocused && !isCompositeNotebook"
             },
             {
+                "command": "python.executeSelectionInSupervisor",
+                "key": "ctrl+enter",
+                "mac": "cmd+enter",
+                "when": "editorTextFocus && editorLangId == python && !findInputFocussed && !replaceInputFocussed && !jupyter.ownsSelection && !notebookEditorFocused && !isCompositeNotebook"
+            },
+            {
+                "command": "python.executeSelectionInSupervisorWithoutAdvancing",
+                "key": "alt+enter",
+                "when": "editorTextFocus && editorLangId == python && !findInputFocussed && !replaceInputFocussed && !jupyter.ownsSelection && !notebookEditorFocused && !isCompositeNotebook"
+            },
+            {
                 "command": "python.execInREPL",
                 "key": "shift+enter",
                 "when": "config.python.REPL.sendToNativeREPL && editorLangId == python && editorTextFocus && !jupyter.ownsSelection && !notebookEditorFocused && !isCompositeNotebook"
@@ -1296,6 +1349,12 @@
                 },
                 {
                     "category": "Python",
+                    "command": "python.execInConsole",
+                    "title": "Run Python File in Console",
+                    "when": "!virtualWorkspace && shellExecutionSupported && editorLangId == python"
+                },
+                {
+                    "category": "Python",
                     "command": "python.execInTerminal",
                     "title": "%python.command.python.execInTerminal.title%",
                     "when": "!virtualWorkspace && shellExecutionSupported && editorLangId == python"
@@ -1416,6 +1475,11 @@
             ],
             "python.run": [
                 {
+                    "command": "python.execInConsole",
+                    "group": "Python",
+                    "when": "resourceLangId == python && !virtualWorkspace && shellExecutionSupported"
+                },
+                {
                     "command": "python.execInTerminal",
                     "group": "Python",
                     "when": "resourceLangId == python && !virtualWorkspace && shellExecutionSupported"
@@ -1437,6 +1501,12 @@
                 }
             ],
             "editor/title/run": [
+                {
+                    "command": "python.execInConsole",
+                    "group": "navigation@0",
+                    "title": "Run Python File in Console",
+                    "when": "resourceLangId == python && !isInDiffEditor && !virtualWorkspace && shellExecutionSupported"
+                },
                 {
                     "command": "python.execInTerminal-icon",
                     "group": "navigation@0",
@@ -1702,7 +1772,8 @@
         "addExtensionPackDependencies": "gulp addExtensionPackDependencies",
         "updateBuildNumber": "gulp updateBuildNumber",
         "verifyBundle": "gulp verifyBundle",
-        "webpack": "webpack"
+        "webpack": "webpack",
+        "sync:supervisor-api": "node scripts/sync-supervisor-api.mjs"
     },
     "dependencies": {
         "@iarna/toml": "^3.0.0",
