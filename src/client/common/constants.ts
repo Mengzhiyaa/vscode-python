@@ -44,6 +44,7 @@ export namespace Commands {
     export const Create_Environment_Check = 'python.createEnvironmentCheck';
     export const Create_Terminal = 'python.createTerminal';
     export const Debug_In_Terminal = 'python.debugInTerminal';
+    export const Exec_In_Console = 'python.execInConsole';
     export const Exec_In_Terminal = 'python.execInTerminal';
     export const Exec_In_Terminal_Icon = 'python.execInTerminal-icon';
     export const Exec_In_Separate_Terminal = 'python.execInDedicatedTerminal';

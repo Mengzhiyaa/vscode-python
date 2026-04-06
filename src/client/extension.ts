@@ -47,6 +47,7 @@ import { registerTools } from './chat';
 import { IRecommendedEnvironmentService } from './interpreter/configuration/types';
 import { registerTypes as unitTestsRegisterTypes } from './testing/serviceRegistry';
 import { registerTestCommands } from './testing/main';
+import { activateSupervisor } from './supervisor/extension';
 
 durations.codeLoadingTime = stopWatch.elapsedTime;
 
@@ -82,6 +83,9 @@ export async function activate(context: IExtensionContext): Promise<PythonExtens
     }
     // Send the "success" telemetry only if activation did not fail.
     // Otherwise Telemetry is send via the error handler.
+    void activateSupervisor(context, serviceContainer).catch((ex) => {
+        traceError('Python supervisor activation failed', ex);
+    });
     sendStartupTelemetry(ready, durations, stopWatch, serviceContainer, isFirstSession)
         // Run in the background.
         .ignoreErrors();
