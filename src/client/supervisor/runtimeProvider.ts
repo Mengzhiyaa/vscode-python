@@ -84,9 +84,7 @@ export class PythonRuntimeProvider implements ILanguageRuntimeProvider<PythonRun
         private readonly _interpreterService: IInterpreterService,
     ) {}
 
-    async *discoverInstallations(
-        logChannel: vscode.LogOutputChannel,
-    ): AsyncGenerator<PythonRuntimeInstallation> {
+    async *discoverInstallations(logChannel: vscode.LogOutputChannel): AsyncGenerator<PythonRuntimeInstallation> {
         await this.refreshInterpreters(logChannel);
         for (const interpreter of this.listInterpreterEnvironments()) {
             yield this.installationFromEnvironment(interpreter);
@@ -196,7 +194,7 @@ export class PythonRuntimeProvider implements ILanguageRuntimeProvider<PythonRun
             sessionLocation: RUNTIME_SESSION_LOCATION.Workspace,
             extraRuntimeData: {
                 installation,
-            } satisfies PythonRuntimeExtraData,
+            } as PythonRuntimeExtraData,
         };
     }
 
@@ -239,15 +237,7 @@ export class PythonRuntimeProvider implements ILanguageRuntimeProvider<PythonRun
     }
 
     async shouldRecommendForWorkspace(): Promise<boolean> {
-        const globs = [
-            '**/*.py',
-            'pyproject.toml',
-            'requirements.txt',
-            'setup.py',
-            'Pipfile',
-            '.venv',
-            '.conda',
-        ];
+        const globs = ['**/*.py', 'pyproject.toml', 'requirements.txt', 'setup.py', 'Pipfile', '.venv', '.conda'];
         const glob = `{${globs.join(',')}}`;
         return (await vscode.workspace.findFiles(glob, '**/node_modules/**', 1)).length > 0;
     }
@@ -281,7 +271,9 @@ export class PythonRuntimeProvider implements ILanguageRuntimeProvider<PythonRun
         }
 
         try {
-            const activeInterpreter = await this._interpreterService.getActiveInterpreter(resource ?? this.getPrimaryWorkspaceUri());
+            const activeInterpreter = await this._interpreterService.getActiveInterpreter(
+                resource ?? this.getPrimaryWorkspaceUri(),
+            );
             this._activeInterpreterPath = activeInterpreter?.path;
         } catch (error) {
             logChannel.warn(`[Python Supervisor] Failed to resolve active interpreter: ${error}`);
@@ -293,9 +285,7 @@ export class PythonRuntimeProvider implements ILanguageRuntimeProvider<PythonRun
             canSelectFiles: true,
             canSelectFolders: false,
             canSelectMany: false,
-            filters: process.platform === 'win32'
-                ? { Python: ['exe'] }
-                : undefined,
+            filters: process.platform === 'win32' ? { Python: ['exe'] } : undefined,
             openLabel: 'Use Interpreter',
             title: 'Select Python interpreter',
         });
@@ -328,9 +318,10 @@ export class PythonRuntimeProvider implements ILanguageRuntimeProvider<PythonRun
         const sourceLabel = getSourceLabel(installation.envType);
         const installationLabel = getInstallationLabel(installation);
         if (sourceLabel || installationLabel) {
-            const suffix = installationLabel && installationLabel !== installation.version
-                ? `${sourceLabel}: ${installationLabel}`
-                : sourceLabel;
+            const suffix =
+                installationLabel && installationLabel !== installation.version
+                    ? `${sourceLabel}: ${installationLabel}`
+                    : sourceLabel;
             parts.push(`(${suffix})`);
         }
         return parts.join(' ');
@@ -345,7 +336,10 @@ export class PythonRuntimeProvider implements ILanguageRuntimeProvider<PythonRun
         const unique = new Map<string, PythonEnvironment>();
         for (const interpreter of interpreters) {
             if (interpreter.path) {
-                unique.set(process.platform === 'win32' ? interpreter.path.toLowerCase() : interpreter.path, interpreter);
+                unique.set(
+                    process.platform === 'win32' ? interpreter.path.toLowerCase() : interpreter.path,
+                    interpreter,
+                );
             }
         }
         return Array.from(unique.values()).sort((left, right) => {

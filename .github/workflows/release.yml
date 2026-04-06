@@ -14,26 +14,32 @@ jobs:
         include:
           - runner: ubuntu-latest
             target: linux-x64
+            cargo_target: x86_64-unknown-linux-musl
             target_os: linux
             target_arch: x64
           - runner: ubuntu-latest
             target: linux-arm64
+            cargo_target: aarch64-unknown-linux-gnu
             target_os: linux
             target_arch: arm64
-          - runner: macos-13
+          - runner: macos-15
             target: darwin-x64
+            cargo_target: x86_64-apple-darwin
             target_os: darwin
             target_arch: x64
           - runner: macos-latest
             target: darwin-arm64
+            cargo_target: aarch64-apple-darwin
             target_os: darwin
             target_arch: arm64
           - runner: windows-latest
             target: win32-x64
+            cargo_target: x86_64-pc-windows-msvc
             target_os: windows
             target_arch: x64
           - runner: windows-latest
             target: win32-arm64
+            cargo_target: aarch64-pc-windows-msvc
             target_os: windows
             target_arch: arm64
 
@@ -45,37 +51,34 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Checkout Python Environment Tools
+        uses: actions/checkout@v4
         with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
+          repository: 'microsoft/python-environment-tools'
+          path: 'python-env-tools'
+          persist-credentials: false
+          sparse-checkout: |
+            crates
+            Cargo.toml
+            Cargo.lock
+          sparse-checkout-cone-mode: false
 
       - name: Install APK binary
         env:
           TARGET_OS: ${{ matrix.target_os }}
           TARGET_ARCH: ${{ matrix.target_arch }}
-        run: npm run install:apk -- --retry 3
-
-      - name: Compile extension
-        run: npx gulp prePublishNonBundle
-
-      - name: Package target VSIX
-        shell: bash
         run: |
-          mkdir -p release-artifacts
-          npx vsce package --no-dependencies --target "${{ matrix.target }}" --out "release-artifacts/vscode-python-${{ matrix.target }}.vsix"
+          npm ci
+          npm run install:apk -- --retry 3
 
-      - name: Upload VSIX artifact
-        uses: actions/upload-artifact@v4
+      - name: Build VSIX
+        uses: ./.github/actions/build-vsix
         with:
-          name: vscode-python-${{ matrix.target }}
-          path: release-artifacts/*.vsix
-          retention-days: 30
+          node_version: '22'
+          vsix_name: 'vscode-python-${{ matrix.target }}.vsix'
+          artifact_name: 'vscode-python-${{ matrix.target }}'
+          cargo_target: ${{ matrix.cargo_target }}
+          vsix_target: ${{ matrix.target }}
 
   release:
     needs: package

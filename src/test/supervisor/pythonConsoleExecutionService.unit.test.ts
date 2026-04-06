@@ -37,9 +37,9 @@ suite('Python Supervisor - Console Execution Service', () => {
             getLiveConsoleSession: sinon.stub().returns(undefined),
         };
         executeCodeStub = sinon.stub().resolves('session-1');
-        positronConsoleService = {
+        positronConsoleService = ({
             executeCode: executeCodeStub,
-        } as unknown as IPositronConsoleService;
+        } as unknown) as IPositronConsoleService;
 
         serviceContainer
             .setup((container) => container.get(TypeMoq.It.isValue(ICodeExecutionHelper)))
@@ -52,7 +52,7 @@ suite('Python Supervisor - Console Execution Service', () => {
             .returns(() => ({ terminal: { executeInFileDir: true } } as any));
 
         service = new PythonConsoleExecutionService(
-            runtimeRouter as unknown as PythonConsoleRuntimeRouter,
+            (runtimeRouter as unknown) as PythonConsoleRuntimeRouter,
             serviceContainer.object,
             positronConsoleService,
         );

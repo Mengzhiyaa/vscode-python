@@ -69,14 +69,8 @@ export class PythonConsoleRuntimeRouter {
         };
     }
 
-    async resolveRuntimeMetadata(
-        _source: string,
-        resource?: vscode.Uri,
-    ): Promise<LanguageRuntimeMetadata | undefined> {
-        const installation = await this._runtimeProvider.resolveActiveInstallation(
-            this._services.logChannel,
-            resource,
-        );
+    async resolveRuntimeMetadata(_source: string, resource?: vscode.Uri): Promise<LanguageRuntimeMetadata | undefined> {
+        const installation = await this._runtimeProvider.resolveActiveInstallation(this._services.logChannel, resource);
         if (installation) {
             return this.registerInstallation(installation);
         }
@@ -136,10 +130,7 @@ export class PythonConsoleRuntimeRouter {
         return this._runtimeProvider.resolveActiveInstallation(this._services.logChannel, resource);
     }
 
-    private async selectRuntimeForLiveConsole(
-        metadata: LanguageRuntimeMetadata,
-        source: string,
-    ): Promise<void> {
+    private async selectRuntimeForLiveConsole(metadata: LanguageRuntimeMetadata, source: string): Promise<void> {
         const existingSession = this.getLiveConsoleSession();
         if (!existingSession || existingSession.runtimeMetadata.runtimeId === metadata.runtimeId) {
             return;

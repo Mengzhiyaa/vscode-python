@@ -19,6 +19,9 @@ env:
   # Unicode characters are causing 2.7 failures so skip that for now.
   special-working-directory: './path with spaces'
   special-working-directory-relative: 'path with spaces'
+  # vscode-supervisor dependency
+  SUPERVISOR_CHECKOUT_PATH: .deps/vscode-supervisor
+  SUPERVISOR_REPOSITORY: Mengzhiyaa/vscode-supervisor
 
 jobs:
   build-vsix:
@@ -242,6 +245,25 @@ jobs:
       - name: Install dependencies (npm ci)
         run: npm ci
 
+      - name: Checkout vscode-supervisor
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ env.SUPERVISOR_REPOSITORY }}
+          path: ${{ env.special-working-directory-relative }}/${{ env.SUPERVISOR_CHECKOUT_PATH }}
+          persist-credentials: false
+
+      - name: Install supervisor dependencies
+        run: npm ci
+        working-directory: ${{ env.special-working-directory }}/${{ env.SUPERVISOR_CHECKOUT_PATH }}
+
+      - name: Build supervisor
+        run: npm run build
+        working-directory: ${{ env.special-working-directory }}/${{ env.SUPERVISOR_CHECKOUT_PATH }}
+
+      - name: Package supervisor VSIX
+        run: npx @vscode/vsce package --no-dependencies -o supervisor.vsix
+        working-directory: ${{ env.special-working-directory }}/${{ env.SUPERVISOR_CHECKOUT_PATH }}
+
       - name: Compile
         run: npx gulp prePublishNonBundle
 
@@ -367,6 +389,7 @@ jobs:
         env:
           TEST_FILES_SUFFIX: testvirtualenvs
           CI_PYTHON_VERSION: ${{ matrix.python }}
+          SUPERVISOR_VSIX_PATH: ${{ env.SUPERVISOR_CHECKOUT_PATH }}/supervisor.vsix
         uses: GabrielBB/xvfb-action@b706e4e27b14669b486812790492dc50ca16b465 # v1.7
         with:
           run: npm run testSingleWorkspace
@@ -376,6 +399,7 @@ jobs:
       - name: Run single-workspace tests
         env:
           CI_PYTHON_VERSION: ${{ matrix.python }}
+          SUPERVISOR_VSIX_PATH: ${{ env.SUPERVISOR_CHECKOUT_PATH }}/supervisor.vsix
         uses: GabrielBB/xvfb-action@b706e4e27b14669b486812790492dc50ca16b465 # v1.7
         with:
           run: npm run testSingleWorkspace
@@ -385,6 +409,7 @@ jobs:
       - name: Run debugger tests
         env:
           CI_PYTHON_VERSION: ${{ matrix.python }}
+          SUPERVISOR_VSIX_PATH: ${{ env.SUPERVISOR_CHECKOUT_PATH }}/supervisor.vsix
         uses: GabrielBB/xvfb-action@b706e4e27b14669b486812790492dc50ca16b465 # v1.7
         with:
           run: npm run testDebugger

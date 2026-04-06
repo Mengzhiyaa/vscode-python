@@ -54,9 +54,7 @@ function resolveApkBinaryPath(context: vscode.ExtensionContext): string {
         }
     }
 
-    throw new Error(
-        `Unable to find the apk binary. Set python.supervisor.apkPath or ${APK_BINARY_ENV_VAR}.`,
-    );
+    throw new Error(`Unable to find the apk binary. Set python.supervisor.apkPath or ${APK_BINARY_ENV_VAR}.`);
 }
 
 function createDisplayName(installation: PythonRuntimeInstallation): string {

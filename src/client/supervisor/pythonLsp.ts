@@ -57,19 +57,6 @@ function getLspOutputChannel(): vscode.OutputChannel {
     return lspOutputChannel;
 }
 
-export class PythonLanguageLspFactory implements ILanguageLspFactory {
-    readonly languageId = PYTHON_LANGUAGE;
-
-    create(
-        runtimeMetadata: LanguageRuntimeMetadata,
-        sessionMetadata: IRuntimeSessionMetadata,
-        dynState: LanguageRuntimeDynState,
-        logChannel: vscode.LogOutputChannel,
-    ): ILanguageLsp {
-        return new PythonLanguageLsp(runtimeMetadata.languageVersion, sessionMetadata, dynState, logChannel);
-    }
-}
-
 export class PythonLanguageLsp implements ILanguageLsp {
     private client?: LanguageClient;
     private _state: LanguageLspState = LANGUAGE_LSP_STATE.Uninitialized;
@@ -89,8 +76,7 @@ export class PythonLanguageLsp implements ILanguageLsp {
         private readonly _logChannel: vscode.LogOutputChannel,
     ) {
         this._languageClientName =
-            `Python language client (${_version}) for session ` +
-            `${_dynState.sessionName} - '${_metadata.sessionId}'`;
+            `Python language client (${_version}) for session ` + `${_dynState.sessionName} - '${_metadata.sessionId}'`;
     }
 
     get state(): LanguageLspState {
@@ -141,37 +127,39 @@ export class PythonLanguageLsp implements ILanguageLsp {
         const out = new PromiseHandles<void>();
         this._initializing = out.promise;
 
-        this.activationDisposables.push(this.client.onDidChangeState((event) => {
-            const oldState = this._state;
-            switch (event.newState) {
-                case State.Starting:
-                    this.setState(LANGUAGE_LSP_STATE.Starting);
-                    break;
-                case State.Running:
-                    if (this._initializing) {
-                        this._initializing = undefined;
-                        if (this.client) {
-                            this.registerPositronLspExtensions(this.client);
+        this.activationDisposables.push(
+            this.client.onDidChangeState((event) => {
+                const oldState = this._state;
+                switch (event.newState) {
+                    case State.Starting:
+                        this.setState(LANGUAGE_LSP_STATE.Starting);
+                        break;
+                    case State.Running:
+                        if (this._initializing) {
+                            this._initializing = undefined;
+                            if (this.client) {
+                                this.registerPositronLspExtensions(this.client);
+                            }
+                            out.resolve();
                         }
-                        out.resolve();
-                    }
-                    this.setState(LANGUAGE_LSP_STATE.Running);
-                    break;
-                case State.Stopped:
-                    if (this._initializing) {
-                        out.reject(new Error('Python language client stopped before initialization'));
-                    }
-                    this.setState(LANGUAGE_LSP_STATE.Stopped);
-                    break;
-                default:
-                    break;
-            }
+                        this.setState(LANGUAGE_LSP_STATE.Running);
+                        break;
+                    case State.Stopped:
+                        if (this._initializing) {
+                            out.reject(new Error('Python language client stopped before initialization'));
+                        }
+                        this.setState(LANGUAGE_LSP_STATE.Stopped);
+                        break;
+                    default:
+                        break;
+                }
 
-            this.log(
-                `${this._languageClientName} state changed ${oldState} => ${this._state}`,
-                vscode.LogLevel.Debug,
-            );
-        }));
+                this.log(
+                    `${this._languageClientName} state changed ${oldState} => ${this._state}`,
+                    vscode.LogLevel.Debug,
+                );
+            }),
+        );
 
         this.client.start();
         await out.promise;
@@ -232,10 +220,7 @@ export class PythonLanguageLsp implements ILanguageLsp {
         getLspOutputChannel().show();
     }
 
-    async requestCompletion(
-        code: string,
-        position: { line: number; character: number },
-    ): Promise<any[]> {
+    async requestCompletion(code: string, position: { line: number; character: number }): Promise<any[]> {
         const result = await this.requestForVirtualDocument<any>('textDocument/completion', code, position);
         if (Array.isArray(result)) {
             return result;
@@ -248,17 +233,11 @@ export class PythonLanguageLsp implements ILanguageLsp {
         return [];
     }
 
-    async requestHover(
-        code: string,
-        position: { line: number; character: number },
-    ): Promise<any | null> {
+    async requestHover(code: string, position: { line: number; character: number }): Promise<any | null> {
         return this.requestForVirtualDocument('textDocument/hover', code, position);
     }
 
-    async requestSignatureHelp(
-        code: string,
-        position: { line: number; character: number },
-    ): Promise<any | null> {
+    async requestSignatureHelp(code: string, position: { line: number; character: number }): Promise<any | null> {
         return this.requestForVirtualDocument('textDocument/signatureHelp', code, position);
     }
 
@@ -335,5 +314,18 @@ export class PythonLanguageLsp implements ILanguageLsp {
                 this._logChannel.info(formatted);
                 break;
         }
+    }
+}
+
+export class PythonLanguageLspFactory implements ILanguageLspFactory {
+    readonly languageId = PYTHON_LANGUAGE;
+
+    create(
+        runtimeMetadata: LanguageRuntimeMetadata,
+        sessionMetadata: IRuntimeSessionMetadata,
+        dynState: LanguageRuntimeDynState,
+        logChannel: vscode.LogOutputChannel,
+    ): ILanguageLsp {
+        return new PythonLanguageLsp(runtimeMetadata.languageVersion, sessionMetadata, dynState, logChannel);
     }
 }

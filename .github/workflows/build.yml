@@ -20,11 +20,14 @@ env:
   # Use the mocha-multi-reporters and send output to both console (spec) and JUnit (mocha-junit-reporter).
   # Also enables a reporter which exits the process running the tests if it haven't already.
   MOCHA_REPORTER_JUNIT: true
+  # vscode-supervisor dependency
+  SUPERVISOR_CHECKOUT_PATH: .deps/vscode-supervisor
+  SUPERVISOR_REPOSITORY: Mengzhiyaa/vscode-supervisor
 
 jobs:
   setup:
     name: Set up
-    if: github.repository == 'microsoft/vscode-python'
+    if: github.repository == 'Mengzhiyaa/vscode-python'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -48,7 +51,7 @@ jobs:
 
   build-vsix:
     name: Create VSIX
-    if: github.repository == 'microsoft/vscode-python'
+    if: github.repository == 'Mengzhiyaa/vscode-python'
     needs: setup
     runs-on: ${{ matrix.os }}
     strategy:
@@ -111,7 +114,7 @@ jobs:
 
   lint:
     name: Lint
-    if: github.repository == 'microsoft/vscode-python'
+    if: github.repository == 'Mengzhiyaa/vscode-python'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -126,7 +129,7 @@ jobs:
 
   check-types:
     name: Check Python types
-    if: github.repository == 'microsoft/vscode-python'
+    if: github.repository == 'Mengzhiyaa/vscode-python'
     runs-on: ubuntu-latest
     steps:
       - name: Use Python ${{ env.PYTHON_VERSION }}
@@ -202,7 +205,7 @@ jobs:
 
   tests:
     name: Tests
-    if: github.repository == 'microsoft/vscode-python'
+    if: github.repository == 'Mengzhiyaa/vscode-python'
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -244,6 +247,25 @@ jobs:
 
       - name: Install dependencies (npm ci)
         run: npm ci
+
+      - name: Checkout vscode-supervisor
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ env.SUPERVISOR_REPOSITORY }}
+          path: ${{ env.special-working-directory-relative }}/${{ env.SUPERVISOR_CHECKOUT_PATH }}
+          persist-credentials: false
+
+      - name: Install supervisor dependencies
+        run: npm ci
+        working-directory: ${{ env.special-working-directory }}/${{ env.SUPERVISOR_CHECKOUT_PATH }}
+
+      - name: Build supervisor
+        run: npm run build
+        working-directory: ${{ env.special-working-directory }}/${{ env.SUPERVISOR_CHECKOUT_PATH }}
+
+      - name: Package supervisor VSIX
+        run: npx @vscode/vsce package --no-dependencies -o supervisor.vsix
+        working-directory: ${{ env.special-working-directory }}/${{ env.SUPERVISOR_CHECKOUT_PATH }}
 
       - name: Compile
         run: npx gulp prePublishNonBundle
@@ -370,6 +392,7 @@ jobs:
         env:
           TEST_FILES_SUFFIX: testvirtualenvs
           CI_PYTHON_VERSION: ${{ matrix.python }}
+          SUPERVISOR_VSIX_PATH: ${{ env.SUPERVISOR_CHECKOUT_PATH }}/supervisor.vsix
         uses: GabrielBB/xvfb-action@b706e4e27b14669b486812790492dc50ca16b465 # v1.7
         with:
           run: npm run testSingleWorkspace
@@ -379,6 +402,7 @@ jobs:
       - name: Run single-workspace tests
         env:
           CI_PYTHON_VERSION: ${{ matrix.python }}
+          SUPERVISOR_VSIX_PATH: ${{ env.SUPERVISOR_CHECKOUT_PATH }}/supervisor.vsix
         uses: GabrielBB/xvfb-action@b706e4e27b14669b486812790492dc50ca16b465 # v1.7
         with:
           run: npm run testSingleWorkspace
@@ -388,6 +412,7 @@ jobs:
       - name: Run multi-workspace tests
         env:
           CI_PYTHON_VERSION: ${{ matrix.python }}
+          SUPERVISOR_VSIX_PATH: ${{ env.SUPERVISOR_CHECKOUT_PATH }}/supervisor.vsix
         uses: GabrielBB/xvfb-action@b706e4e27b14669b486812790492dc50ca16b465 # v1.7
         with:
           run: npm run testMultiWorkspace
@@ -397,6 +422,7 @@ jobs:
       - name: Run debugger tests
         env:
           CI_PYTHON_VERSION: ${{ matrix.python }}
+          SUPERVISOR_VSIX_PATH: ${{ env.SUPERVISOR_CHECKOUT_PATH }}/supervisor.vsix
         uses: GabrielBB/xvfb-action@b706e4e27b14669b486812790492dc50ca16b465 # v1.7
         with:
           run: npm run testDebugger
@@ -410,7 +436,7 @@ jobs:
 
   smoke-tests:
     name: Smoke tests
-    if: github.repository == 'microsoft/vscode-python'
+    if: github.repository == 'Mengzhiyaa/vscode-python'
     runs-on: ${{ matrix.os }}
     needs: [setup, build-vsix]
     strategy:
