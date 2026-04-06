@@ -100,10 +100,7 @@ export class PythonForegroundSessionManager implements vscode.Disposable {
         }
     }
 
-    private async didChangeSessionRuntimeState(
-        session: ILanguageRuntimeSession,
-        state: RuntimeState,
-    ): Promise<void> {
+    private async didChangeSessionRuntimeState(session: ILanguageRuntimeSession, state: RuntimeState): Promise<void> {
         if (state !== RUNTIME_STATE_READY) {
             return;
         }
@@ -113,10 +110,7 @@ export class PythonForegroundSessionManager implements vscode.Disposable {
             return;
         }
 
-        if (
-            session.metadata.sessionMode === 'console' &&
-            this.getLastForegroundSessionId() === session.sessionId
-        ) {
+        if (session.metadata.sessionMode === 'console' && this.getLastForegroundSessionId() === session.sessionId) {
             await this.activateConsoleSession(session, 'foreground session is ready');
         }
     }

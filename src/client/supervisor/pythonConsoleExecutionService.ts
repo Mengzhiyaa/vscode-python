@@ -23,7 +23,8 @@ export class PythonConsoleExecutionService {
     }
 
     async executeFile(source: string, resource?: vscode.Uri): Promise<void> {
-        let fileToExecute = resource instanceof vscode.Uri ? resource : await this._codeExecutionHelper.getFileToExecute();
+        let fileToExecute =
+            resource instanceof vscode.Uri ? resource : await this._codeExecutionHelper.getFileToExecute();
         if (!fileToExecute) {
             return;
         }
@@ -55,11 +56,7 @@ export class PythonConsoleExecutionService {
         );
     }
 
-    async executeSelectionCommand(
-        source: string,
-        command: string,
-        resource?: vscode.Uri,
-    ): Promise<void> {
+    async executeSelectionCommand(source: string, command: string, resource?: vscode.Uri): Promise<void> {
         // Match Ark/R editor execution semantics: once a Python console is live,
         // follow the current foreground console session instead of re-selecting a
         // runtime from the editor's active interpreter before every Ctrl+Enter.

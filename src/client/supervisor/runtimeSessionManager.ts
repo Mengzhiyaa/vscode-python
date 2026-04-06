@@ -10,10 +10,7 @@ import type {
     LanguageSessionMode,
 } from './types/supervisor-api';
 
-function createDynState(
-    sessionMetadata: IRuntimeSessionMetadata,
-    sessionName: string,
-): LanguageRuntimeDynState {
+function createDynState(sessionMetadata: IRuntimeSessionMetadata, sessionName: string): LanguageRuntimeDynState {
     return {
         sessionName,
         inputPrompt: '>>>',
@@ -25,11 +22,7 @@ function createDynState(
 }
 
 function toLanguageSessionMode(sessionMode: IRuntimeSessionMetadata['sessionMode']): LanguageSessionMode {
-    return sessionMode === 'notebook'
-        ? 'notebook'
-        : sessionMode === 'background'
-            ? 'background'
-            : 'console';
+    return sessionMode === 'notebook' ? 'notebook' : sessionMode === 'background' ? 'background' : 'console';
 }
 
 export class PythonRuntimeSessionManager implements ILanguageRuntimeSessionManager {
@@ -66,12 +59,7 @@ export class PythonRuntimeSessionManager implements ILanguageRuntimeSessionManag
         );
         const dynState = createDynState(normalizedSessionMetadata, sessionName);
 
-        return this._api.createSession(
-            runtimeMetadata,
-            normalizedSessionMetadata,
-            kernelSpec,
-            dynState,
-        );
+        return this._api.createSession(runtimeMetadata, normalizedSessionMetadata, kernelSpec, dynState);
     }
 
     async validateSession(runtimeMetadata: LanguageRuntimeMetadata, sessionId: string): Promise<boolean> {
@@ -93,16 +81,10 @@ export class PythonRuntimeSessionManager implements ILanguageRuntimeSessionManag
         };
         const dynState = createDynState(normalizedSessionMetadata, sessionName);
 
-        return this._api.restoreSession(
-            runtimeMetadata,
-            normalizedSessionMetadata,
-            dynState,
-        );
+        return this._api.restoreSession(runtimeMetadata, normalizedSessionMetadata, dynState);
     }
 
     async validateMetadata(metadata: LanguageRuntimeMetadata): Promise<LanguageRuntimeMetadata> {
-        return this._runtimeProvider.validateMetadata
-            ? this._runtimeProvider.validateMetadata(metadata)
-            : metadata;
+        return this._runtimeProvider.validateMetadata ? this._runtimeProvider.validateMetadata(metadata) : metadata;
     }
 }

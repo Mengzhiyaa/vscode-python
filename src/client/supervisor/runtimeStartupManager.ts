@@ -10,8 +10,9 @@ import { PythonRuntimeInstallation, PythonRuntimeProvider } from './runtimeProvi
 export class PythonRuntimeStartupManager implements vscode.Disposable, IRuntimeManager {
     private static _nextRuntimeManagerId = 1;
 
-    private readonly _onDidDiscoverRuntimeEmitter =
-        new vscode.EventEmitter<IDiscoveredLanguageRuntime<PythonRuntimeInstallation>>();
+    private readonly _onDidDiscoverRuntimeEmitter = new vscode.EventEmitter<
+        IDiscoveredLanguageRuntime<PythonRuntimeInstallation>
+    >();
 
     private readonly _onDidFinishDiscoveryEmitter = new vscode.EventEmitter<void>();
 
@@ -44,8 +45,10 @@ export class PythonRuntimeStartupManager implements vscode.Disposable, IRuntimeM
     }
 
     async recommendWorkspaceRuntimes(disabledLanguageIds: string[]): Promise<LanguageRuntimeMetadata[]> {
-        if (disabledLanguageIds.includes(this._runtimeProvider.languageId) ||
-            !this._runtimeProvider.shouldRecommendForWorkspace) {
+        if (
+            disabledLanguageIds.includes(this._runtimeProvider.languageId) ||
+            !this._runtimeProvider.shouldRecommendForWorkspace
+        ) {
             return [];
         }
 
@@ -63,11 +66,7 @@ export class PythonRuntimeStartupManager implements vscode.Disposable, IRuntimeM
             installation,
             this._logChannel,
         );
-        this._runtimeManager.registerDiscoveredRuntime?.(
-            this._runtimeProvider.languageId,
-            installation,
-            metadata,
-        );
+        this._runtimeManager.registerDiscoveredRuntime?.(this._runtimeProvider.languageId, installation, metadata);
 
         return [metadata];
     }
@@ -91,11 +90,12 @@ export class PythonRuntimeStartupManager implements vscode.Disposable, IRuntimeM
                 installation,
                 this._logChannel,
             );
-            const wasRegistered = this._runtimeManager.registerDiscoveredRuntime?.(
-                this._runtimeProvider.languageId,
-                installation,
-                metadata,
-            ) ?? false;
+            const wasRegistered =
+                this._runtimeManager.registerDiscoveredRuntime?.(
+                    this._runtimeProvider.languageId,
+                    installation,
+                    metadata,
+                ) ?? false;
 
             if (!wasRegistered) {
                 continue;
