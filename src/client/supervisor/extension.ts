@@ -4,11 +4,25 @@ import { IInterpreterService } from '../interpreter/contracts';
 import { IServiceContainer } from '../ioc/types';
 import { traceWarn } from '../logging';
 import { PythonLanguageContribution } from './pythonLanguageContribution';
-import type { ISupervisorFrameworkApi } from './types/supervisor-api';
+import type { ILanguageWebviewAssets, ISupervisorFrameworkApi } from './types/supervisor-api';
 
 const SUPERVISOR_EXTENSION_ID = 'mengzhiya.vscode-supervisor';
 
 let supervisorRegistrationPromise: Promise<void> | undefined;
+
+export function createSupervisorWebviewAssets(context: IExtensionContext): ILanguageWebviewAssets {
+    const supervisorResourceRoot = vscode.Uri.joinPath(context.extensionUri, 'resources', 'supervisor');
+    const syntaxRoot = vscode.Uri.joinPath(context.extensionUri, 'syntaxes');
+
+    return {
+        localResourceRoots: [supervisorResourceRoot, syntaxRoot],
+        monacoSupportModule: vscode.Uri.joinPath(supervisorResourceRoot, 'pythonMonacoSupport.js'),
+        textMateGrammar: {
+            scopeName: 'source.python',
+            grammarUri: vscode.Uri.joinPath(syntaxRoot, 'MagicPython.tmLanguage.json'),
+        },
+    };
+}
 
 export async function activateSupervisor(
     context: IExtensionContext,
@@ -31,6 +45,7 @@ export async function activateSupervisor(
         await api.registerLanguageSupport({
             runtimeProvider: contribution.runtimeProvider,
             languageContribution: contribution,
+            webviewAssets: createSupervisorWebviewAssets(context),
         });
     })().catch((error) => {
         supervisorRegistrationPromise = undefined;

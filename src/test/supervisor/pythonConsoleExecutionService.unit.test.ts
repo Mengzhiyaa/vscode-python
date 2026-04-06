@@ -18,6 +18,7 @@ suite('Python Supervisor - Console Execution Service', () => {
     let configurationService: TypeMoq.IMock<IConfigurationService>;
     let runtimeRouter: {
         ensureConsoleSession: sinon.SinonStub;
+        getLiveConsoleSession: sinon.SinonStub;
     };
     let executeCodeStub: sinon.SinonStub;
     let positronConsoleService: IPositronConsoleService;
@@ -33,6 +34,7 @@ suite('Python Supervisor - Console Execution Service', () => {
                 sessionId: 'session-1',
                 runtimeMetadata: { runtimeId: 'python-runtime-1' },
             }),
+            getLiveConsoleSession: sinon.stub().returns(undefined),
         };
         executeCodeStub = sinon.stub().resolves('session-1');
         positronConsoleService = {
@@ -91,7 +93,7 @@ suite('Python Supervisor - Console Execution Service', () => {
         expect(focus).to.equal(true);
     });
 
-    test('executes selection commands after ensuring a supervisor console session', async () => {
+    test('executes selection commands after ensuring a supervisor console session when no console is live', async () => {
         const executeCommandStub = sinon.stub().resolves(undefined);
         const file = vscode.Uri.file('/tmp/test.py');
         (vscode.commands as any).executeCommand = executeCommandStub;
@@ -108,6 +110,26 @@ suite('Python Supervisor - Console Execution Service', () => {
             file,
             false,
         );
+        sinon.assert.calledOnceWithExactly(executeCommandStub, 'supervisor.console.executeCode');
+    });
+
+    test('executes selection commands against the live console session without re-routing runtimes', async () => {
+        const executeCommandStub = sinon.stub().resolves(undefined);
+        const file = vscode.Uri.file('/tmp/test.py');
+        (vscode.commands as any).executeCommand = executeCommandStub;
+        runtimeRouter.getLiveConsoleSession.returns({
+            sessionId: 'session-2',
+            state: 'ready',
+            runtimeMetadata: { runtimeId: 'python-runtime-2', languageId: PYTHON_LANGUAGE_ID },
+        });
+
+        await service.executeSelectionCommand(
+            'python.executeSelectionInSupervisor',
+            'supervisor.console.executeCode',
+            file,
+        );
+
+        sinon.assert.notCalled(runtimeRouter.ensureConsoleSession);
         sinon.assert.calledOnceWithExactly(executeCommandStub, 'supervisor.console.executeCode');
     });
 

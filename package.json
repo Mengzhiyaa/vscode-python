@@ -6,6 +6,11 @@
     "featureFlags": {
         "usingNewInterpreterStorage": true
     },
+    "positron": {
+        "binaryDependencies": {
+            "apk": "0.1.0"
+        }
+    },
     "capabilities": {
         "untrustedWorkspaces": {
             "supported": false,
@@ -1773,7 +1778,8 @@
         "updateBuildNumber": "gulp updateBuildNumber",
         "verifyBundle": "gulp verifyBundle",
         "webpack": "webpack",
-        "sync:supervisor-api": "node scripts/sync-supervisor-api.mjs"
+        "sync:supervisor-api": "node scripts/sync-supervisor-api.mjs",
+        "install:apk": "node scripts/install-apk.mjs"
     },
     "dependencies": {
         "@iarna/toml": "^3.0.0",

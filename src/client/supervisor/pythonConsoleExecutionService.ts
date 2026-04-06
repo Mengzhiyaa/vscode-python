@@ -60,10 +60,15 @@ export class PythonConsoleExecutionService {
         command: string,
         resource?: vscode.Uri,
     ): Promise<void> {
-        const target = await this._runtimeRouter.ensureConsoleSession(source, resource, false);
-        if (!target) {
-            void vscode.window.showWarningMessage(NO_RUNTIME_MESSAGE);
-            return;
+        // Match Ark/R editor execution semantics: once a Python console is live,
+        // follow the current foreground console session instead of re-selecting a
+        // runtime from the editor's active interpreter before every Ctrl+Enter.
+        if (!this._runtimeRouter.getLiveConsoleSession()) {
+            const target = await this._runtimeRouter.ensureConsoleSession(source, resource, false);
+            if (!target) {
+                void vscode.window.showWarningMessage(NO_RUNTIME_MESSAGE);
+                return;
+            }
         }
 
         await vscode.commands.executeCommand(command);
