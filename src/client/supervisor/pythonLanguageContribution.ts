@@ -26,76 +26,6 @@ export const PYTHON_EXECUTE_IN_SUPERVISOR_COMMAND = 'python.executeSelectionInSu
 export const PYTHON_EXECUTE_IN_SUPERVISOR_WITHOUT_ADVANCING_COMMAND =
     'python.executeSelectionInSupervisorWithoutAdvancing';
 
-export class PythonLanguageContribution implements ILanguageExtensionContribution {
-    readonly runtimeProvider: PythonRuntimeProvider;
-
-    constructor(
-        private readonly _extensionContext: vscode.ExtensionContext,
-        private readonly _api: ISupervisorFrameworkApi,
-        private readonly _interpreterService: IInterpreterService,
-        private readonly _serviceContainer: IServiceContainer,
-    ) {
-        this.runtimeProvider = new PythonRuntimeProvider(_extensionContext, _interpreterService);
-    }
-
-    async registerContributions(
-        services: ILanguageContributionServices,
-    ): Promise<vscode.Disposable[]> {
-        const runtimeStartupManager = new PythonRuntimeStartupManager(
-            this._extensionContext,
-            this.runtimeProvider,
-            services.runtimeManager,
-            services.runtimeStartupService,
-            services.logChannel,
-        );
-        const runtimeSessionManager = new PythonRuntimeSessionManager(
-            this._extensionContext,
-            this._api,
-            this.runtimeProvider,
-            services.logChannel,
-        );
-        const runtimeRouter = new PythonConsoleRuntimeRouter(
-            this._extensionContext,
-            this._api,
-            this.runtimeProvider,
-            services,
-        );
-        const consoleExecutionService = new PythonConsoleExecutionService(
-            runtimeRouter,
-            this._serviceContainer,
-            services.positronConsoleService,
-        );
-        const sessionRegistry = new PythonSessionRegistry();
-        const foregroundSessionManager = new PythonForegroundSessionManager(
-            this._extensionContext,
-            services.runtimeSessionService,
-            sessionRegistry,
-            this._serviceContainer.get<IPythonPathUpdaterServiceManager>(IPythonPathUpdaterServiceManager),
-            this._serviceContainer.get<IInterpreterHelper>(IInterpreterHelper),
-            this._interpreterService,
-            services.logChannel,
-        );
-        const controller = new PythonSupervisorController(
-            runtimeRouter,
-            this.runtimeProvider,
-            this._interpreterService,
-            services,
-            consoleExecutionService,
-        );
-        await controller.initialize();
-
-        return [
-            services.runtimeManager.registerExternalDiscoveryManager?.(this.runtimeProvider.languageId) ??
-                new vscode.Disposable(() => undefined),
-            services.runtimeStartupService.registerRuntimeManager(runtimeStartupManager),
-            services.runtimeSessionService.registerSessionManager(runtimeSessionManager),
-            runtimeStartupManager,
-            foregroundSessionManager,
-            controller,
-        ];
-    }
-}
-
 class PythonSupervisorController implements vscode.Disposable {
     private readonly _disposables: vscode.Disposable[] = [];
 
@@ -142,7 +72,10 @@ class PythonSupervisorController implements vscode.Disposable {
                 );
             }),
             this.registerCommand(Commands.Exec_In_Console, (resource?: vscode.Uri) =>
-                this._consoleExecutionService.executeFile(Commands.Exec_In_Console, this.getExecutionResource(resource)),
+                this._consoleExecutionService.executeFile(
+                    Commands.Exec_In_Console,
+                    this.getExecutionResource(resource),
+                ),
             ),
         );
     }
@@ -172,26 +105,23 @@ class PythonSupervisorController implements vscode.Disposable {
         );
         if (!runtimeMetadata) {
             const activeInstallation = await this._runtimeRouter.resolveActiveInstallation(executionResource);
-            const installation = await this._services.runtimeSessionService.selectInstallation<PythonRuntimeInstallation>(
-                PYTHON_LANGUAGE_ID,
-                {
-                    allowBrowse: true,
-                    forcePick: true,
-                    persistSelection: true,
-                    preselectRuntimePath: activeInstallation?.pythonPath,
-                    placeHolder: 'Select a Python interpreter for the Supervisor console',
-                    title: 'Python Supervisor Runtime',
-                },
-            );
+            const installation = await this._services.runtimeSessionService.selectInstallation<
+                PythonRuntimeInstallation
+            >(PYTHON_LANGUAGE_ID, {
+                allowBrowse: true,
+                forcePick: true,
+                persistSelection: true,
+                preselectRuntimePath: activeInstallation?.pythonPath,
+                placeHolder: 'Select a Python interpreter for the Supervisor console',
+                title: 'Python Supervisor Runtime',
+            });
             if (installation) {
                 runtimeMetadata = this._runtimeRouter.registerInstallation(installation);
             }
         }
 
         if (!runtimeMetadata) {
-            void vscode.window.showWarningMessage(
-                'No Python interpreter is available for the Supervisor console.',
-            );
+            void vscode.window.showWarningMessage('No Python interpreter is available for the Supervisor console.');
             return;
         }
 
@@ -284,20 +214,83 @@ class PythonSupervisorController implements vscode.Disposable {
         return activeEditor?.document.languageId === PYTHON_LANGUAGE_ID ? activeEditor.document.uri : undefined;
     }
 
-    private registerCommand(
-        command: string,
-        callback: (...args: any[]) => Promise<unknown>,
-    ): vscode.Disposable {
+    private registerCommand(command: string, callback: (...args: any[]) => Promise<unknown>): vscode.Disposable {
         return vscode.commands.registerCommand(command, async (...args: any[]) => {
             try {
                 await callback(...args);
             } catch (error) {
                 const message = error instanceof Error ? error.message : String(error);
-                this._services.logChannel.error(
-                    `[Python Supervisor] Command '${command}' failed: ${message}`,
-                );
+                this._services.logChannel.error(`[Python Supervisor] Command '${command}' failed: ${message}`);
                 void vscode.window.showErrorMessage(`Python Supervisor command failed: ${message}`);
             }
         });
+    }
+}
+
+export class PythonLanguageContribution implements ILanguageExtensionContribution {
+    readonly runtimeProvider: PythonRuntimeProvider;
+
+    constructor(
+        private readonly _extensionContext: vscode.ExtensionContext,
+        private readonly _api: ISupervisorFrameworkApi,
+        private readonly _interpreterService: IInterpreterService,
+        private readonly _serviceContainer: IServiceContainer,
+    ) {
+        this.runtimeProvider = new PythonRuntimeProvider(_extensionContext, _interpreterService);
+    }
+
+    async registerContributions(services: ILanguageContributionServices): Promise<vscode.Disposable[]> {
+        const runtimeStartupManager = new PythonRuntimeStartupManager(
+            this._extensionContext,
+            this.runtimeProvider,
+            services.runtimeManager,
+            services.runtimeStartupService,
+            services.logChannel,
+        );
+        const runtimeSessionManager = new PythonRuntimeSessionManager(
+            this._extensionContext,
+            this._api,
+            this.runtimeProvider,
+            services.logChannel,
+        );
+        const runtimeRouter = new PythonConsoleRuntimeRouter(
+            this._extensionContext,
+            this._api,
+            this.runtimeProvider,
+            services,
+        );
+        const consoleExecutionService = new PythonConsoleExecutionService(
+            runtimeRouter,
+            this._serviceContainer,
+            services.positronConsoleService,
+        );
+        const sessionRegistry = new PythonSessionRegistry();
+        const foregroundSessionManager = new PythonForegroundSessionManager(
+            this._extensionContext,
+            services.runtimeSessionService,
+            sessionRegistry,
+            this._serviceContainer.get<IPythonPathUpdaterServiceManager>(IPythonPathUpdaterServiceManager),
+            this._serviceContainer.get<IInterpreterHelper>(IInterpreterHelper),
+            this._interpreterService,
+            services.logChannel,
+        );
+        const controller = new PythonSupervisorController(
+            runtimeRouter,
+            this.runtimeProvider,
+            this._interpreterService,
+            services,
+            consoleExecutionService,
+        );
+        await controller.initialize();
+
+        return [
+            services.runtimeManager.registerExternalDiscoveryManager?.(this.runtimeProvider.languageId) ??
+                new vscode.Disposable(() => undefined),
+            services.runtimeStartupService.registerRuntimeManager(runtimeStartupManager),
+            services.runtimeSessionService.registerSessionManager(runtimeSessionManager),
+            runtimeStartupManager,
+            foregroundSessionManager,
+            controller,
+        ];
     }
 }

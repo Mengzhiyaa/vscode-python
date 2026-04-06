@@ -35,14 +35,14 @@ suite('Python Supervisor - Foreground Session Manager', () => {
 
     function createContext() {
         const state = new Map<string, string | null>();
-        return {
+        return ({
             workspaceState: {
                 get: (key: string) => state.get(key),
                 update: async (key: string, value: string | null) => {
                     state.set(key, value);
                 },
             },
-        } as unknown as vscode.ExtensionContext;
+        } as unknown) as vscode.ExtensionContext;
     }
 
     function createRuntimeSessionService(activeSessions: any[] = []) {
@@ -77,13 +77,16 @@ suite('Python Supervisor - Foreground Session Manager', () => {
             createContext(),
             runtimeSessionService as any,
             new PythonSessionRegistry(),
-            { updatePythonPath: sinon.stub().resolves() } as unknown as IPythonPathUpdaterServiceManager,
-            {
-                getActiveWorkspaceUri: () => ({ folderUri: vscode.Uri.file('/workspace'), configTarget: vscode.ConfigurationTarget.Workspace }),
-            } as unknown as IInterpreterHelper,
-            {
+            ({ updatePythonPath: sinon.stub().resolves() } as unknown) as IPythonPathUpdaterServiceManager,
+            ({
+                getActiveWorkspaceUri: () => ({
+                    folderUri: vscode.Uri.file('/workspace'),
+                    configTarget: vscode.ConfigurationTarget.Workspace,
+                }),
+            } as unknown) as IInterpreterHelper,
+            ({
                 getActiveInterpreter: sinon.stub().resolves(undefined),
-            } as unknown as IInterpreterService,
+            } as unknown) as IInterpreterService,
             new MockOutputChannel('python-supervisor'),
         );
 
@@ -109,13 +112,16 @@ suite('Python Supervisor - Foreground Session Manager', () => {
             createContext(),
             runtimeSessionService as any,
             new PythonSessionRegistry(),
-            { updatePythonPath: sinon.stub().resolves() } as unknown as IPythonPathUpdaterServiceManager,
-            {
-                getActiveWorkspaceUri: () => ({ folderUri: vscode.Uri.file('/workspace'), configTarget: vscode.ConfigurationTarget.Workspace }),
-            } as unknown as IInterpreterHelper,
-            {
+            ({ updatePythonPath: sinon.stub().resolves() } as unknown) as IPythonPathUpdaterServiceManager,
+            ({
+                getActiveWorkspaceUri: () => ({
+                    folderUri: vscode.Uri.file('/workspace'),
+                    configTarget: vscode.ConfigurationTarget.Workspace,
+                }),
+            } as unknown) as IInterpreterHelper,
+            ({
                 getActiveInterpreter: sinon.stub().resolves(undefined),
-            } as unknown as IInterpreterService,
+            } as unknown) as IInterpreterService,
             new MockOutputChannel('python-supervisor'),
         );
 
@@ -141,13 +147,16 @@ suite('Python Supervisor - Foreground Session Manager', () => {
             createContext(),
             runtimeSessionService as any,
             new PythonSessionRegistry(),
-            { updatePythonPath } as unknown as IPythonPathUpdaterServiceManager,
-            {
-                getActiveWorkspaceUri: () => ({ folderUri: vscode.Uri.file('/workspace'), configTarget: vscode.ConfigurationTarget.Workspace }),
-            } as unknown as IInterpreterHelper,
-            {
+            ({ updatePythonPath } as unknown) as IPythonPathUpdaterServiceManager,
+            ({
+                getActiveWorkspaceUri: () => ({
+                    folderUri: vscode.Uri.file('/workspace'),
+                    configTarget: vscode.ConfigurationTarget.Workspace,
+                }),
+            } as unknown) as IInterpreterHelper,
+            ({
                 getActiveInterpreter: sinon.stub().resolves({ path: '/tmp/other/python' }),
-            } as unknown as IInterpreterService,
+            } as unknown) as IInterpreterService,
             new MockOutputChannel('python-supervisor'),
         );
 

@@ -44,8 +44,9 @@ type StatementRangeResponse =
     | StatementRangeSyntaxRejectionResponse;
 
 export namespace PythonStatementRangeRequest {
-    export const type: RequestType<StatementRangeParams, StatementRangeResponse | undefined, any> =
-        new RequestType('positron/textDocument/statementRange');
+    export const type: RequestType<StatementRangeParams, StatementRangeResponse | undefined, any> = new RequestType(
+        'positron/textDocument/statementRange',
+    );
 }
 
 export class PythonStatementRangeSyntaxError extends Error {
@@ -99,9 +100,7 @@ export class PythonStatementRangeProvider {
                     if (response.rejectionKind === StatementRangeRejectionKind.Syntax) {
                         throw new PythonStatementRangeSyntaxError(response.line);
                     }
-                    throw new Error(
-                        `Unrecognized statement range rejection kind: ${response.rejectionKind}`,
-                    );
+                    throw new Error(`Unrecognized statement range rejection kind: ${response.rejectionKind}`);
                 default:
                     throw new Error(
                         `Unrecognized statement range response kind: ${String((response as { kind?: unknown }).kind)}`,
@@ -110,10 +109,7 @@ export class PythonStatementRangeProvider {
         });
     }
 
-    private async withOpenDocument<T>(
-        document: vscode.TextDocument,
-        fn: () => Promise<T>,
-    ): Promise<T> {
+    private async withOpenDocument<T>(document: vscode.TextDocument, fn: () => Promise<T>): Promise<T> {
         const textDocument = {
             uri: document.uri.toString(),
             languageId: document.languageId,

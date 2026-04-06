@@ -103,7 +103,6 @@
         "onTerminalShellIntegration:python"
     ],
     "main": "./out/client/extension",
-    "browser": "./dist/extension.browser.js",
     "l10n": "./l10n",
     "contributes": {
         "problemMatchers": [

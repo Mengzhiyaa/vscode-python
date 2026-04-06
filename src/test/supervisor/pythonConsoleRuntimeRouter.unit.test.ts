@@ -93,7 +93,10 @@ suite('Python Supervisor - Console Runtime Router', () => {
         runtimeProvider.createRuntimeMetadata.returns(runtimeMetadata);
         services.runtimeSessionService.getConsoleSessionForLanguage.returns(session);
 
-        const result = await router.ensureConsoleSession('python.executeSelectionInSupervisor', vscode.Uri.file('/tmp/test.py'));
+        const result = await router.ensureConsoleSession(
+            'python.executeSelectionInSupervisor',
+            vscode.Uri.file('/tmp/test.py'),
+        );
 
         expect(result?.runtimeMetadata).to.equal(runtimeMetadata);
         expect(result?.sessionId).to.equal('session-1');

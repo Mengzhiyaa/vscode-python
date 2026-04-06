@@ -1,10 +1,5 @@
 import * as vscode from 'vscode';
-import {
-    LanguageClient,
-    Position,
-    RequestType,
-    VersionedTextDocumentIdentifier,
-} from 'vscode-languageclient/node';
+import { LanguageClient, Position, RequestType, VersionedTextDocumentIdentifier } from 'vscode-languageclient/node';
 
 interface HelpTopicParams {
     textDocument: VersionedTextDocumentIdentifier;
@@ -16,8 +11,9 @@ interface HelpTopicResponse {
 }
 
 export namespace PythonHelpTopicRequest {
-    export const type: RequestType<HelpTopicParams, HelpTopicResponse | undefined, any> =
-        new RequestType('positron/textDocument/helpTopic');
+    export const type: RequestType<HelpTopicParams, HelpTopicResponse | undefined, any> = new RequestType(
+        'positron/textDocument/helpTopic',
+    );
 }
 
 export class PythonHelpTopicProvider {
@@ -39,10 +35,7 @@ export class PythonHelpTopicProvider {
         });
     }
 
-    private async withOpenDocument<T>(
-        document: vscode.TextDocument,
-        fn: () => Promise<T>,
-    ): Promise<T> {
+    private async withOpenDocument<T>(document: vscode.TextDocument, fn: () => Promise<T>): Promise<T> {
         const textDocument = {
             uri: document.uri.toString(),
             languageId: document.languageId,
