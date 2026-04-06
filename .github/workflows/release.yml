@@ -1,0 +1,166 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            target: linux-x64
+            target_os: linux
+            target_arch: x64
+          - runner: ubuntu-latest
+            target: linux-arm64
+            target_os: linux
+            target_arch: arm64
+          - runner: macos-13
+            target: darwin-x64
+            target_os: darwin
+            target_arch: x64
+          - runner: macos-latest
+            target: darwin-arm64
+            target_os: darwin
+            target_arch: arm64
+          - runner: windows-latest
+            target: win32-x64
+            target_os: windows
+            target_arch: x64
+          - runner: windows-latest
+            target: win32-arm64
+            target_os: windows
+            target_arch: arm64
+
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install APK binary
+        env:
+          TARGET_OS: ${{ matrix.target_os }}
+          TARGET_ARCH: ${{ matrix.target_arch }}
+        run: npm run install:apk -- --retry 3
+
+      - name: Compile extension
+        run: npx gulp prePublishNonBundle
+
+      - name: Package target VSIX
+        shell: bash
+        run: |
+          mkdir -p release-artifacts
+          npx vsce package --no-dependencies --target "${{ matrix.target }}" --out "release-artifacts/vscode-python-${{ matrix.target }}.vsix"
+
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vscode-python-${{ matrix.target }}
+          path: release-artifacts/*.vsix
+          retention-days: 30
+
+  release:
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download packaged artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*.vsix
+          generate_release_notes: true
+
+  publish-marketplace:
+    needs:
+      - package
+      - release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      VSCE_PAT: ${{ secrets.VSCE_PAT }}
+
+    steps:
+      - name: Download packaged artifacts
+        if: env.VSCE_PAT != ''
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Setup Node.js
+        if: env.VSCE_PAT != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Publish to Visual Studio Marketplace
+        if: env.VSCE_PAT != ''
+        shell: bash
+        run: |
+          shopt -s globstar nullglob
+          files=(artifacts/**/*.vsix)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No VSIX artifacts found"
+            exit 1
+          fi
+          npx @vscode/vsce publish --skip-duplicate --packagePath "${files[@]}" --pat "${VSCE_PAT}"
+
+  publish-openvsx:
+    needs:
+      - package
+      - release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      OVSX_PAT: ${{ secrets.OVSX_PAT }}
+
+    steps:
+      - name: Download packaged artifacts
+        if: env.OVSX_PAT != ''
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Setup Node.js
+        if: env.OVSX_PAT != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Publish to Open VSX
+        if: env.OVSX_PAT != ''
+        shell: bash
+        run: |
+          shopt -s globstar nullglob
+          files=(artifacts/**/*.vsix)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No VSIX artifacts found"
+            exit 1
+          fi
+          npx ovsx -p "${OVSX_PAT}" publish --skip-duplicate --packagePath "${files[@]}"
