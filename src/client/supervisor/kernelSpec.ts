@@ -2,10 +2,17 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { untildify } from '../common/helpers';
+import * as workspaceApis from '../common/vscodeApis/workspaceApis';
 import type { JupyterKernelSpec, LanguageSessionMode } from './types/supervisor-api';
 import type { PythonRuntimeInstallation } from './runtimeProvider';
 
 const APK_BINARY_ENV_VAR = 'VSCODE_PYTHON_SUPERVISOR_APK_PATH';
+
+type ApkPathCandidate = {
+    source: string;
+    path: string | undefined;
+    explicit: boolean;
+};
 
 function getApkExecutableName(): string {
     return process.platform === 'win32' ? 'apk.exe' : 'apk';
@@ -36,25 +43,73 @@ function findExecutableOnPath(executableName: string): string | undefined {
     return undefined;
 }
 
-function resolveApkBinaryPath(context: vscode.ExtensionContext): string {
-    const configuredPath = vscode.workspace.getConfiguration('python').get<string>('supervisor.apkPath');
+function getApkPathCandidates(context: vscode.ExtensionContext): ApkPathCandidate[] {
+    const configuredPath = workspaceApis.getConfiguration('python').get<string>('supervisor.apkPath');
     const executableName = getApkExecutableName();
-    const pathCandidates = [
-        normalizeCandidatePath(configuredPath),
-        normalizeCandidatePath(process.env[APK_BINARY_ENV_VAR]),
-        path.join(context.extensionPath, 'resources', 'apk', executableName),
-        path.resolve(context.extensionPath, '..', '..', '..', 'apk', 'target', 'release', executableName),
-        path.resolve(context.extensionPath, '..', '..', '..', 'apk', 'target', 'debug', executableName),
-        findExecutableOnPath(executableName),
+    return [
+        {
+            source: 'python.supervisor.apkPath',
+            path: normalizeCandidatePath(configuredPath),
+            explicit: true,
+        },
+        {
+            source: APK_BINARY_ENV_VAR,
+            path: normalizeCandidatePath(process.env[APK_BINARY_ENV_VAR]),
+            explicit: true,
+        },
+        {
+            source: 'supervisor binary install',
+            path: path.join(context.extensionPath, 'resources', 'apk', executableName),
+            explicit: false,
+        },
+        {
+            source: 'local apk release build',
+            path: path.resolve(context.extensionPath, '..', '..', '..', 'apk', 'target', 'release', executableName),
+            explicit: false,
+        },
+        {
+            source: 'local apk debug build',
+            path: path.resolve(context.extensionPath, '..', '..', '..', 'apk', 'target', 'debug', executableName),
+            explicit: false,
+        },
+        {
+            source: 'PATH',
+            path: findExecutableOnPath(executableName),
+            explicit: false,
+        },
     ];
+}
+
+function resolveApkBinaryPath(
+    context: vscode.ExtensionContext,
+    logChannel: vscode.LogOutputChannel,
+): string {
+    const pathCandidates = getApkPathCandidates(context);
 
     for (const candidate of pathCandidates) {
-        if (candidate && fs.existsSync(candidate)) {
-            return candidate;
+        if (!candidate.path) {
+            continue;
+        }
+
+        if (fs.existsSync(candidate.path)) {
+            logChannel.info(`[Python Supervisor] Using apk binary from ${candidate.source}: ${candidate.path}`);
+            return candidate.path;
+        }
+
+        if (candidate.explicit) {
+            logChannel.warn(`[Python Supervisor] Ignoring missing apk binary from ${candidate.source}: ${candidate.path}`);
         }
     }
 
-    throw new Error(`Unable to find the apk binary. Set python.supervisor.apkPath or ${APK_BINARY_ENV_VAR}.`);
+    const checkedPaths = pathCandidates
+        .filter((candidate) => !!candidate.path)
+        .map((candidate) => `${candidate.source}: ${candidate.path}`)
+        .join(', ');
+
+    throw new Error(
+        `Unable to find the apk binary. Set python.supervisor.apkPath or ${APK_BINARY_ENV_VAR}. ` +
+        `Checked ${checkedPaths || 'no candidate paths'}.`,
+    );
 }
 
 function createDisplayName(installation: PythonRuntimeInstallation): string {
@@ -72,7 +127,7 @@ export async function createApkKernelSpec(
     sessionMode: LanguageSessionMode,
     logChannel: vscode.LogOutputChannel,
 ): Promise<JupyterKernelSpec> {
-    const apkPath = resolveApkBinaryPath(context);
+    const apkPath = resolveApkBinaryPath(context, logChannel);
     const kernelSpec: JupyterKernelSpec = {
         argv: [
             apkPath,
