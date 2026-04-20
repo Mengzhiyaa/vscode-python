@@ -473,3 +473,65 @@ jobs:
         with:
           node_version: ${{ env.NODE_VERSION }}
           artifact_name: ${{ needs.setup.outputs.vsix_artifact_name }}-${{ matrix.vsix-target }}
+
+  publish-ci-prerelease:
+    name: Publish CI prerelease
+    if: github.repository == 'Mengzhiyaa/vscode-python'
+    needs:
+      - build-vsix
+      - lint
+      - check-types
+      - python-tests
+      - tests
+      - smoke-tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: vscode-python-ci-prerelease
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_NAME: CI Pre-release
+      RELEASE_TAG: ci-latest
+
+    steps:
+      - name: Download packaged artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Refresh CI pre-release
+        shell: bash
+        run: |
+          shopt -s globstar nullglob
+          files=(artifacts/**/*.vsix)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No VSIX artifacts found"
+            exit 1
+          fi
+
+          branch_ref="${GITHUB_REF_NAME//\//%2F}"
+          branch_head="$(gh api "/repos/${GITHUB_REPOSITORY}/git/ref/heads/${branch_ref}" --jq '.object.sha')"
+          if [ "${branch_head}" != "${GITHUB_SHA}" ]; then
+            echo "Skip prerelease publish because ${GITHUB_REF_NAME} advanced to ${branch_head}"
+            exit 0
+          fi
+
+          cat > prerelease-notes.md <<EOF
+          Automated CI pre-release for \`${GITHUB_REF_NAME}\`.
+
+          Commit: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}
+          EOF
+
+          gh release delete "${RELEASE_TAG}" --cleanup-tag --yes >/dev/null 2>&1 || true
+          gh api \
+            --method DELETE \
+            "/repos/${GITHUB_REPOSITORY}/git/refs/tags/${RELEASE_TAG}" \
+            >/dev/null 2>&1 || true
+
+          gh release create "${RELEASE_TAG}" "${files[@]}" \
+            --target "${GITHUB_SHA}" \
+            --title "${RELEASE_NAME}" \
+            --notes-file prerelease-notes.md \
+            --prerelease
