@@ -1,33 +1,33 @@
 import * as vscode from 'vscode';
 export declare enum RuntimeState {
-    Uninitialized = 'uninitialized',
-    Initializing = 'initializing',
-    Starting = 'starting',
-    Ready = 'ready',
-    Idle = 'idle',
-    Busy = 'busy',
-    Restarting = 'restarting',
-    Exiting = 'exiting',
-    Exited = 'exited',
-    Offline = 'offline',
-    Interrupting = 'interrupting',
+    Uninitialized = "uninitialized",
+    Initializing = "initializing",
+    Starting = "starting",
+    Ready = "ready",
+    Idle = "idle",
+    Busy = "busy",
+    Restarting = "restarting",
+    Exiting = "exiting",
+    Exited = "exited",
+    Offline = "offline",
+    Interrupting = "interrupting"
 }
 export declare enum RuntimeExitReason {
-    Unknown = 'unknown',
-    Shutdown = 'shutdown',
-    ForcedQuit = 'forcedQuit',
-    Restart = 'restart',
-    Error = 'error',
-    StartupFailed = 'startupFailed',
-    SwitchRuntime = 'switchRuntime',
-    ExtensionHost = 'extensionHost',
-    Transferred = 'transferred',
+    Unknown = "unknown",
+    Shutdown = "shutdown",
+    ForcedQuit = "forcedQuit",
+    Restart = "restart",
+    Error = "error",
+    StartupFailed = "startupFailed",
+    SwitchRuntime = "switchRuntime",
+    ExtensionHost = "extensionHost",
+    Transferred = "transferred"
 }
 export declare enum RuntimeStartMode {
-    Starting = 'starting',
-    Restarting = 'restarting',
-    Reconnecting = 'reconnecting',
-    Switching = 'switching',
+    Starting = "starting",
+    Restarting = "restarting",
+    Reconnecting = "reconnecting",
+    Switching = "switching"
 }
 export interface LanguageRuntimeExit {
     runtime_name: string;
@@ -37,22 +37,22 @@ export interface LanguageRuntimeExit {
     message: string;
 }
 export declare enum RuntimeStartupPhase {
-    Initializing = 'initializing',
-    AwaitingTrust = 'awaitingTrust',
-    Reconnecting = 'reconnecting',
-    NewFolderTasks = 'newFolderTasks',
-    Starting = 'starting',
-    Discovering = 'discovering',
-    Complete = 'complete',
+    Initializing = "initializing",
+    AwaitingTrust = "awaitingTrust",
+    Reconnecting = "reconnecting",
+    NewFolderTasks = "newFolderTasks",
+    Starting = "starting",
+    Discovering = "discovering",
+    Complete = "complete"
 }
 export declare enum NewFolderStartupPhase {
-    Initializing = 'initializing',
-    ApplyLayout = 'applyLayout',
-    AwaitingTrust = 'awaitingTrust',
-    CreatingFolder = 'creatingFolder',
-    RuntimeStartup = 'runtimeStartup',
-    PostInitialization = 'postInitialization',
-    Complete = 'complete',
+    Initializing = "initializing",
+    ApplyLayout = "applyLayout",
+    AwaitingTrust = "awaitingTrust",
+    CreatingFolder = "creatingFolder",
+    RuntimeStartup = "runtimeStartup",
+    PostInitialization = "postInitialization",
+    Complete = "complete"
 }
 /**
  * Read-only view of a {@link Barrier} for the public API surface.
@@ -99,30 +99,24 @@ export interface IPositronNewFolderService extends vscode.Disposable {
     initNewFolder(): Promise<void>;
     completeRuntimeStartup(): Promise<void>;
     isCurrentWindowNewFolder(): boolean;
-    registerInitTask(
-        task: Promise<void> | (() => Promise<void>),
-        options?: IPositronNewFolderTaskOptions,
-    ): vscode.Disposable;
-    registerPostInitTask(
-        task: Promise<void> | (() => Promise<void>),
-        options?: IPositronNewFolderTaskOptions,
-    ): vscode.Disposable;
+    registerInitTask(task: Promise<void> | (() => Promise<void>), options?: IPositronNewFolderTaskOptions): vscode.Disposable;
+    registerPostInitTask(task: Promise<void> | (() => Promise<void>), options?: IPositronNewFolderTaskOptions): vscode.Disposable;
 }
 export declare enum LanguageRuntimeSessionMode {
-    Console = 'console',
-    Notebook = 'notebook',
-    Background = 'background',
+    Console = "console",
+    Notebook = "notebook",
+    Background = "background"
 }
 export declare enum LanguageRuntimeSessionLocation {
-    Machine = 'machine',
-    Workspace = 'workspace',
-    Browser = 'browser',
+    Machine = "machine",
+    Workspace = "workspace",
+    Browser = "browser"
 }
 export declare enum LanguageRuntimeStartupBehavior {
-    Immediate = 'immediate',
-    Implicit = 'implicit',
-    Explicit = 'explicit',
-    Manual = 'manual',
+    Immediate = "immediate",
+    Implicit = "implicit",
+    Explicit = "explicit",
+    Manual = "manual"
 }
 export interface LanguageRuntimeMetadata {
     runtimeId: string;
@@ -184,31 +178,19 @@ export interface ILanguageInstallationPickerOptions {
     preselectRuntimePath?: string;
 }
 export interface ILanguageStatementRangeProvider {
-    provideStatementRange(
-        document: vscode.TextDocument,
-        position: vscode.Position,
-        token: vscode.CancellationToken,
-    ): vscode.ProviderResult<
-        | {
-              range: vscode.Range;
-              code?: string;
-          }
-        | null
-        | undefined
-    >;
+    provideStatementRange(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): vscode.ProviderResult<{
+        range: vscode.Range;
+        code?: string;
+    } | null | undefined>;
 }
 export interface ILanguageHelpTopicProvider {
-    provideHelpTopic(
-        document: vscode.TextDocument,
-        position: vscode.Position,
-        token: vscode.CancellationToken,
-    ): vscode.ProviderResult<string | null | undefined>;
+    provideHelpTopic(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): vscode.ProviderResult<string | null | undefined>;
 }
 export declare enum LanguageLspState {
-    Uninitialized = 'uninitialized',
-    Starting = 'starting',
-    Stopped = 'stopped',
-    Running = 'running',
+    Uninitialized = "uninitialized",
+    Starting = "starting",
+    Stopped = "stopped",
+    Running = "running"
 }
 export interface ILanguageLspStateChangeEvent {
     oldState: LanguageLspState;
@@ -223,36 +205,22 @@ export interface ILanguageLsp extends vscode.Disposable {
     deactivate(): Promise<void>;
     wait(): Promise<boolean>;
     showOutput(): void;
-    requestCompletion(
-        code: string,
-        position: {
-            line: number;
-            character: number;
-        },
-    ): Promise<any[]>;
-    requestHover(
-        code: string,
-        position: {
-            line: number;
-            character: number;
-        },
-    ): Promise<any | null>;
-    requestSignatureHelp(
-        code: string,
-        position: {
-            line: number;
-            character: number;
-        },
-    ): Promise<any | null>;
+    requestCompletion(code: string, position: {
+        line: number;
+        character: number;
+    }): Promise<any[]>;
+    requestHover(code: string, position: {
+        line: number;
+        character: number;
+    }): Promise<any | null>;
+    requestSignatureHelp(code: string, position: {
+        line: number;
+        character: number;
+    }): Promise<any | null>;
 }
 export interface ILanguageLspFactory {
     readonly languageId: string;
-    create(
-        runtimeMetadata: LanguageRuntimeMetadata,
-        sessionMetadata: IRuntimeSessionMetadata,
-        dynState: LanguageRuntimeDynState,
-        logChannel: vscode.LogOutputChannel,
-    ): ILanguageLsp;
+    create(runtimeMetadata: LanguageRuntimeMetadata, sessionMetadata: IRuntimeSessionMetadata, dynState: LanguageRuntimeDynState, logChannel: vscode.LogOutputChannel): ILanguageLsp;
 }
 export type LanguageSessionMode = 'console' | 'notebook' | 'background';
 export interface ILanguageRuntimeProvider<TInstallation = unknown> {
@@ -261,25 +229,13 @@ export interface ILanguageRuntimeProvider<TInstallation = unknown> {
     readonly lspFactory?: ILanguageLspFactory;
     discoverInstallations(logChannel: vscode.LogOutputChannel): AsyncGenerator<TInstallation>;
     resolveInitialInstallation(logChannel: vscode.LogOutputChannel): Promise<TInstallation | undefined>;
-    promptForInstallation(
-        logChannel: vscode.LogOutputChannel,
-        options?: ILanguageInstallationPickerOptions,
-    ): Promise<TInstallation | undefined>;
+    promptForInstallation(logChannel: vscode.LogOutputChannel, options?: ILanguageInstallationPickerOptions): Promise<TInstallation | undefined>;
     formatRuntimeName(installation: TInstallation): string;
     getRuntimeIconPath?(installation: TInstallation): vscode.IconPath | undefined;
     getRuntimePath(installation: TInstallation): string;
     getRuntimeSource(installation: TInstallation): string;
-    createRuntimeMetadata(
-        context: vscode.ExtensionContext,
-        installation: TInstallation,
-        logChannel: vscode.LogOutputChannel,
-    ): LanguageRuntimeMetadata;
-    createKernelSpec(
-        context: vscode.ExtensionContext,
-        installation: TInstallation,
-        sessionMode: LanguageSessionMode,
-        logChannel: vscode.LogOutputChannel,
-    ): Promise<JupyterKernelSpec>;
+    createRuntimeMetadata(context: vscode.ExtensionContext, installation: TInstallation, logChannel: vscode.LogOutputChannel): LanguageRuntimeMetadata;
+    createKernelSpec(context: vscode.ExtensionContext, installation: TInstallation, sessionMode: LanguageSessionMode, logChannel: vscode.LogOutputChannel): Promise<JupyterKernelSpec>;
     validateMetadata?(metadata: LanguageRuntimeMetadata): Promise<LanguageRuntimeMetadata>;
     validateSession?(sessionId: string): Promise<boolean>;
     restoreInstallationFromMetadata?(metadata: LanguageRuntimeMetadata): TInstallation | undefined;
@@ -298,6 +254,18 @@ export interface IBinaryProvider {
     readonly ownerId: string;
     getBinaryDefinitions(): Readonly<Record<string, BinaryDefinition>>;
 }
+export interface Utf8Position {
+    line: number;
+    character: number;
+}
+export interface Utf8Range {
+    start: Utf8Position;
+    end: Utf8Position;
+}
+export interface Utf8Location {
+    uri: vscode.Uri;
+    range: Utf8Range;
+}
 export interface ICodeExecutionAttribution {
     source: string;
     fileUri?: vscode.Uri;
@@ -305,16 +273,16 @@ export interface ICodeExecutionAttribution {
     metadata?: Record<string, unknown>;
 }
 export declare enum LanguageRuntimeClientType {
-    Variables = 'positron.variables',
-    Lsp = 'positron.lsp',
-    Plot = 'positron.plot',
-    DataExplorer = 'positron.dataExplorer',
-    Ui = 'positron.ui',
-    Help = 'positron.help',
-    Connection = 'positron.connection',
-    Reticulate = 'positron.reticulate',
-    IPyWidget = 'jupyter.widget',
-    IPyWidgetControl = 'jupyter.widget.control',
+    Variables = "positron.variables",
+    Lsp = "positron.lsp",
+    Plot = "positron.plot",
+    DataExplorer = "positron.dataExplorer",
+    Ui = "positron.ui",
+    Help = "positron.help",
+    Connection = "positron.connection",
+    Reticulate = "positron.reticulate",
+    IPyWidget = "jupyter.widget",
+    IPyWidgetControl = "jupyter.widget.control"
 }
 export interface ILanguageRuntimeClientInstance extends vscode.Disposable {
     getClientId(): string;
@@ -340,10 +308,7 @@ export interface ILanguageRuntimeSession {
     connectDap(): Promise<boolean>;
     disconnectDap(): Promise<void>;
     setConsoleWidth(widthInChars: number): Promise<void>;
-    watchRuntimeClient(
-        clientType: LanguageRuntimeClientType,
-        handler: (client: ILanguageRuntimeClientInstance) => void,
-    ): vscode.Disposable;
+    watchRuntimeClient(clientType: LanguageRuntimeClientType, handler: (client: ILanguageRuntimeClientInstance) => void): vscode.Disposable;
     waitLsp(): Promise<ILanguageLsp | undefined>;
     getRuntimeState(): RuntimeState;
     interrupt(): Promise<void>;
@@ -387,26 +352,14 @@ export interface IRuntimeManager {
     readonly onDidFinishDiscovery?: vscode.Event<void>;
     discoverAllRuntimes(disabledLanguageIds: string[]): Promise<void>;
     recommendWorkspaceRuntimes(disabledLanguageIds: string[]): Promise<LanguageRuntimeMetadata[]>;
-    registerDiscoveredRuntime?<TInstallation = unknown>(
-        languageId: string,
-        installation: TInstallation,
-        metadata: LanguageRuntimeMetadata,
-    ): boolean;
+    registerDiscoveredRuntime?<TInstallation = unknown>(languageId: string, installation: TInstallation, metadata: LanguageRuntimeMetadata): boolean;
     registerExternalDiscoveryManager?(languageId: string): vscode.Disposable;
 }
 export interface ILanguageRuntimeSessionManager {
     managesRuntime(runtimeMetadata: LanguageRuntimeMetadata): Promise<boolean>;
-    createSession(
-        runtimeMetadata: LanguageRuntimeMetadata,
-        sessionMetadata: IRuntimeSessionMetadata,
-        sessionName: string,
-    ): Promise<ILanguageRuntimeSession>;
+    createSession(runtimeMetadata: LanguageRuntimeMetadata, sessionMetadata: IRuntimeSessionMetadata, sessionName: string): Promise<ILanguageRuntimeSession>;
     validateSession(runtimeMetadata: LanguageRuntimeMetadata, sessionId: string): Promise<boolean>;
-    restoreSession(
-        runtimeMetadata: LanguageRuntimeMetadata,
-        sessionMetadata: IRuntimeSessionMetadata,
-        sessionName: string,
-    ): Promise<ILanguageRuntimeSession>;
+    restoreSession(runtimeMetadata: LanguageRuntimeMetadata, sessionMetadata: IRuntimeSessionMetadata, sessionName: string): Promise<ILanguageRuntimeSession>;
     validateMetadata(metadata: LanguageRuntimeMetadata): Promise<LanguageRuntimeMetadata>;
 }
 export interface IRuntimeSessionService {
@@ -434,15 +387,7 @@ export interface IRuntimeSessionService {
     getConsoleSessionForRuntime(runtimeId: string, includeExited?: boolean): ILanguageRuntimeSession | undefined;
     getConsoleSessionForLanguage(languageId: string): ILanguageRuntimeSession | undefined;
     getNotebookSessionForNotebookUri(notebookUri: vscode.Uri): ILanguageRuntimeSession | undefined;
-    startNewRuntimeSession(
-        runtimeId: string,
-        sessionName: string,
-        sessionMode: LanguageRuntimeSessionMode,
-        notebookUri: vscode.Uri | undefined,
-        source: string,
-        startMode: RuntimeStartMode,
-        activate: boolean,
-    ): Promise<string>;
+    startNewRuntimeSession(runtimeId: string, sessionName: string, sessionMode: LanguageRuntimeSessionMode, notebookUri: vscode.Uri | undefined, source: string, startMode: RuntimeStartMode, activate: boolean): Promise<string>;
     autoStartRuntime(metadata: LanguageRuntimeMetadata, source: string, activate: boolean): Promise<string>;
     selectRuntime(runtimeId: string, source: string, notebookUri?: vscode.Uri): Promise<void>;
     focusSession(sessionId: string): Promise<void>;
@@ -453,14 +398,8 @@ export interface IRuntimeSessionService {
     updateNotebookSessionUri(oldUri: vscode.Uri, newUri: vscode.Uri): Promise<string | undefined>;
     updateSessionName(sessionId: string, name: string): void;
     updateActiveLanguages(): void;
-    watchUiClient(
-        sessionId: string,
-        handler: (uiClient: IUiClientInstance) => vscode.Disposable | void,
-    ): vscode.Disposable;
-    selectInstallation<TInstallation = unknown>(
-        languageId: string,
-        options?: ILanguageInstallationPickerOptions,
-    ): Promise<TInstallation | undefined>;
+    watchUiClient(sessionId: string, handler: (uiClient: IUiClientInstance) => vscode.Disposable | void): vscode.Disposable;
+    selectInstallation<TInstallation = unknown>(languageId: string, options?: ILanguageInstallationPickerOptions): Promise<TInstallation | undefined>;
 }
 export interface IPositronConsoleService {
     readonly onDidChangeConsoleWidth: vscode.Event<number>;
@@ -468,13 +407,7 @@ export interface IPositronConsoleService {
     focusConsole(): Promise<void>;
     showConsole(): Promise<void>;
     getConsoleWidth(): number;
-    executeCode(
-        languageId: string,
-        sessionId: string | undefined,
-        code: string,
-        attribution: ICodeExecutionAttribution,
-        focus: boolean,
-    ): Promise<string>;
+    executeCode(languageId: string, sessionId: string | undefined, code: string, attribution: ICodeExecutionAttribution, focus: boolean): Promise<string>;
 }
 export interface IPositronHelpService {
     showHelpTopic(languageId: string, topic: string): Promise<boolean>;
@@ -513,13 +446,10 @@ export interface IRuntimeStartupService {
     getAffiliatedRuntimes(): LanguageRuntimeMetadata[];
     clearAffiliatedRuntime(languageId: string): void;
     getPreferredRuntime(languageId: string): LanguageRuntimeMetadata | undefined;
-    registerNewFolderInitTask(
-        task: Promise<void> | (() => Promise<void>),
-        options?: {
-            label?: string;
-            affiliatedRuntimeMetadata?: LanguageRuntimeMetadata;
-        },
-    ): vscode.Disposable;
+    registerNewFolderInitTask(task: Promise<void> | (() => Promise<void>), options?: {
+        label?: string;
+        affiliatedRuntimeMetadata?: LanguageRuntimeMetadata;
+    }): vscode.Disposable;
     getRestoredSessions(): Promise<SerializedSessionMetadata[]>;
     completeDiscovery(id: number): void;
     registerRuntimeManager(manager: IRuntimeManager): vscode.Disposable;
@@ -536,9 +466,7 @@ export interface ILanguageContributionServices {
 }
 export type LanguageContributionRegistrationResult = void | vscode.Disposable | readonly vscode.Disposable[];
 export interface ILanguageExtensionContribution {
-    registerContributions(
-        services: ILanguageContributionServices,
-    ): LanguageContributionRegistrationResult | Promise<LanguageContributionRegistrationResult>;
+    registerContributions(services: ILanguageContributionServices): LanguageContributionRegistrationResult | Promise<LanguageContributionRegistrationResult>;
 }
 export interface ILanguageTextMateGrammarContribution {
     readonly scopeName: string;
@@ -564,27 +492,11 @@ export interface ISupervisorFrameworkApi {
     readonly positronNewFolderService: IPositronNewFolderService;
     readonly version: string;
     startRuntime(metadata: LanguageRuntimeMetadata, source: string, activate: boolean): Promise<string>;
-    createSession(
-        runtimeMetadata: LanguageRuntimeMetadata,
-        sessionMetadata: IRuntimeSessionMetadata,
-        kernelSpec: JupyterKernelSpec,
-        dynState: LanguageRuntimeDynState,
-    ): Promise<ILanguageRuntimeSession>;
-    restoreSession(
-        runtimeMetadata: LanguageRuntimeMetadata,
-        sessionMetadata: IRuntimeSessionMetadata,
-        dynState: LanguageRuntimeDynState,
-    ): Promise<ILanguageRuntimeSession>;
+    createSession(runtimeMetadata: LanguageRuntimeMetadata, sessionMetadata: IRuntimeSessionMetadata, kernelSpec: JupyterKernelSpec, dynState: LanguageRuntimeDynState): Promise<ILanguageRuntimeSession>;
+    restoreSession(runtimeMetadata: LanguageRuntimeMetadata, sessionMetadata: IRuntimeSessionMetadata, dynState: LanguageRuntimeDynState): Promise<ILanguageRuntimeSession>;
     validateSession(sessionId: string): Promise<boolean>;
-    registerLanguageSupport<TInstallation = unknown>(
-        registration: ILanguageSupportRegistration<TInstallation>,
-    ): Promise<void>;
-    registerLanguageRuntime<TInstallation = unknown>(
-        registration:
-            | ILanguageRuntimeRegistration<TInstallation>
-            | ILanguageSupportRegistration<TInstallation>
-            | ILanguageRuntimeProvider<TInstallation>,
-    ): Promise<void>;
+    registerLanguageSupport<TInstallation = unknown>(registration: ILanguageSupportRegistration<TInstallation>): Promise<void>;
+    registerLanguageRuntime<TInstallation = unknown>(registration: ILanguageRuntimeRegistration<TInstallation> | ILanguageSupportRegistration<TInstallation> | ILanguageRuntimeProvider<TInstallation>): Promise<void>;
     registerLspFactory(factory: ILanguageLspFactory): Promise<void>;
     registerBinaryProvider(provider: IBinaryProvider): Promise<void>;
 }
