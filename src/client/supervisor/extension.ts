@@ -3,6 +3,7 @@ import { IExtensionContext } from '../common/types';
 import { IInterpreterService } from '../interpreter/contracts';
 import { IServiceContainer } from '../ioc/types';
 import { traceWarn } from '../logging';
+import { PythonBinaryProvider } from './binaryProvider';
 import { PythonLanguageContribution } from './pythonLanguageContribution';
 import type { ILanguageWebviewAssets, ISupervisorFrameworkApi } from './types/supervisor-api';
 
@@ -42,8 +43,10 @@ export async function activateSupervisor(
         const api = await supervisorExtension.activate();
         const interpreterService = serviceContainer.get<IInterpreterService>(IInterpreterService);
         const contribution = new PythonLanguageContribution(context, api, interpreterService, serviceContainer);
+        const binaryProvider = new PythonBinaryProvider(context);
         await api.registerLanguageSupport({
             runtimeProvider: contribution.runtimeProvider,
+            binaryProvider,
             languageContribution: contribution,
             webviewAssets: createSupervisorWebviewAssets(context),
         });
