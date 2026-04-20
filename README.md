@@ -105,6 +105,12 @@ Learn more about the rich features of the Python extension:
 
 The extension is available in multiple languages: `de`, `en`, `es`, `fa`, `fr`, `it`, `ja`, `ko-kr`, `nl`, `pl`, `pt-br`, `ru`, `tr`, `zh-cn`, `zh-tw`
 
+## CI And Release
+
+- `.github/workflows/build.yml` packages target VSIX artifacts on branch pushes and republishes them into a single `CI Pre-release` GitHub prerelease.
+- The CI prerelease is recreated from the fixed `ci-latest` tag on each push so it stays at the top of the Releases page and always carries the newest CI VSIX files.
+- `.github/workflows/release.yml` still handles tagged release packaging and release publication.
+
 ## Questions, issues, feature requests, and contributions
 
 -   If you have a question about how to accomplish something with the extension, please [ask on our Discussions page](https://github.com/microsoft/vscode-python/discussions/categories/q-a).
