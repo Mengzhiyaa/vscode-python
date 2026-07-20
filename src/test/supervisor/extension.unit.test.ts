@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 
+import { notifySupervisorEnvironmentContributionsChanged } from '../../client/supervisor/environmentContributions';
 import { activateSupervisor, createSupervisorWebviewAssets } from '../../client/supervisor/extension';
 
 suite('Python Supervisor - Extension Webview Assets', () => {
@@ -42,8 +43,11 @@ suite('Python Supervisor - Extension Webview Assets', () => {
 
     test('registers Python supervisor support with a binary provider and retries after failures', async () => {
         const extensionUri = vscode.Uri.file('/tmp/python-extension');
+        const replaceEnvironmentVariable = 1 as vscode.EnvironmentVariableMutatorType;
+        let startupValue = '/tmp/pythonrc.py';
         const context = ({
             extension: {
+                id: 'ms-python.python',
                 packageJSON: {
                     positron: {
                         binaryDependencies: {
@@ -54,13 +58,29 @@ suite('Python Supervisor - Extension Webview Assets', () => {
             },
             extensionPath: extensionUri.fsPath,
             extensionUri,
+            subscriptions: [],
+            environmentVariableCollection: {
+                forEach: (callback: (name: string, mutator: vscode.EnvironmentVariableMutator) => void) => {
+                    callback('PYTHONSTARTUP', {
+                        type: replaceEnvironmentVariable,
+                        value: startupValue,
+                        options: {},
+                    });
+                },
+            },
         } as unknown) as vscode.ExtensionContext;
         const registerLanguageSupport = sinon.stub();
+        const environmentRegistrationDisposals = [sinon.spy(), sinon.spy()];
+        const registerEnvironmentContributions = sinon.stub();
+        environmentRegistrationDisposals.forEach((dispose, index) => {
+            registerEnvironmentContributions.onCall(index).returns(new vscode.Disposable(dispose));
+        });
         registerLanguageSupport.onFirstCall().rejects(new Error('register failed'));
         registerLanguageSupport.onSecondCall().resolves();
 
         const supervisorApi = {
             registerLanguageSupport,
+            registerEnvironmentContributions,
         };
         const supervisorExtension = {
             activate: sinon.stub().resolves(supervisorApi),
@@ -92,5 +112,30 @@ suite('Python Supervisor - Extension Webview Assets', () => {
         expect(registration.binaryProvider.getBinaryDefinitions().apk.installDir).to.equal(
             path.join(context.extensionPath, 'resources', 'apk'),
         );
+        sinon.assert.calledOnceWithExactly(registerEnvironmentContributions, 'ms-python.python', [
+            {
+                action: replaceEnvironmentVariable,
+                name: 'PYTHONSTARTUP',
+                value: '/tmp/pythonrc.py',
+            },
+        ]);
+
+        startupValue = '/tmp/updated-pythonrc.py';
+        notifySupervisorEnvironmentContributionsChanged();
+        expect(registerEnvironmentContributions.secondCall.args).to.deep.equal([
+            'ms-python.python',
+            [
+                {
+                    action: replaceEnvironmentVariable,
+                    name: 'PYTHONSTARTUP',
+                    value: '/tmp/updated-pythonrc.py',
+                },
+            ],
+        ]);
+        sinon.assert.calledOnce(environmentRegistrationDisposals[0]);
+        sinon.assert.notCalled(environmentRegistrationDisposals[1]);
+
+        context.subscriptions.forEach((subscription) => subscription.dispose());
+        sinon.assert.calledOnce(environmentRegistrationDisposals[1]);
     });
 });

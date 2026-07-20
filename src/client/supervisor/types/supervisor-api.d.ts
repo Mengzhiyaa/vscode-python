@@ -574,6 +574,12 @@ export interface ILanguageContributionServices {
     readonly positronConsoleService: IPositronConsoleService;
     readonly positronHelpService: IPositronHelpService;
     readonly positronPackagesService: IPositronPackagesService;
+    registerEnvironmentContributions(extensionId: string, actions: readonly ISupervisorEnvironmentVariableAction[]): vscode.Disposable;
+}
+export interface ISupervisorEnvironmentVariableAction {
+    readonly action: vscode.EnvironmentVariableMutatorType;
+    readonly name: string;
+    readonly value: string;
 }
 export type LanguageContributionRegistrationResult = void | vscode.Disposable | readonly vscode.Disposable[];
 export interface ILanguageExtensionContribution {
@@ -610,6 +616,7 @@ export interface ISupervisorFrameworkApi {
     registerLanguageRuntime<TInstallation = unknown>(registration: ILanguageRuntimeRegistration<TInstallation> | ILanguageSupportRegistration<TInstallation> | ILanguageRuntimeProvider<TInstallation>): Promise<void>;
     registerLspFactory(factory: ILanguageLspFactory): Promise<void>;
     registerBinaryProvider(provider: IBinaryProvider): Promise<void>;
+    registerEnvironmentContributions(extensionId: string, actions: readonly ISupervisorEnvironmentVariableAction[]): vscode.Disposable;
 }
 export interface IDiscoveredLanguageRuntime<TInstallation = unknown> {
     readonly provider: ILanguageRuntimeProvider<TInstallation>;
