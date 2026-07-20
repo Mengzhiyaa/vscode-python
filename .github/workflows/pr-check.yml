@@ -251,6 +251,9 @@ jobs:
           path: ${{ env.special-working-directory-relative }}/${{ env.SUPERVISOR_CHECKOUT_PATH }}
           persist-credentials: false
 
+      - name: Verify Supervisor API sync
+        run: npm run verify:supervisor-api -- $SUPERVISOR_CHECKOUT_PATH
+
       - name: Install supervisor dependencies
         run: npm ci
         working-directory: ${{ env.special-working-directory }}/${{ env.SUPERVISOR_CHECKOUT_PATH }}

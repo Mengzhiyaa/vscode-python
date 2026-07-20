@@ -3,18 +3,19 @@
     "version": "0.1.0",
     "configurations": [
         {
-            "name": "Extension",
+            "name": "Extension + Local Supervisor",
             "type": "extensionHost",
             "request": "launch",
             "runtimeExecutable": "${execPath}",
             "args": [
                 "--extensionDevelopmentPath=${workspaceFolder}",
-                "--extensionDevelopmentPath=${workspaceFolder}/../vscode-supervisor"
+                "--extensionDevelopmentPath=${workspaceFolder}/../vscode-supervisor",
+                "${workspaceFolder}/src/test"
             ],
             "smartStep": true,
             "sourceMaps": true,
             "outFiles": ["${workspaceFolder}/out/**/*", "!${workspaceFolder}/**/node_modules**/*"],
-            "preLaunchTask": "Compile",
+            "preLaunchTask": "Prepare Extension + Supervisor",
             "skipFiles": ["<node_internals>/**"],
             "env": {
                 // Enable this to turn on redux logging during debugging
@@ -47,12 +48,13 @@
                 "${workspaceFolder}/src/testMultiRootWkspc/multi.code-workspace",
                 "--disable-extensions",
                 "--extensionDevelopmentPath=${workspaceFolder}",
+                "--extensionDevelopmentPath=${workspaceFolder}/../vscode-supervisor",
                 "--extensionTestsPath=${workspaceFolder}/out/test"
             ],
             "sourceMaps": true,
             "smartStep": true,
             "outFiles": ["${workspaceFolder}/out/**/*", "!${workspaceFolder}/**/node_modules**/*"],
-            "preLaunchTask": "Compile",
+            "preLaunchTask": "Prepare Extension + Supervisor",
             "env": {
                 "IS_CI_SERVER_TEST_DEBUGGER": "1"
             },
@@ -69,6 +71,7 @@
                 "${workspaceFolder}/src/testMultiRootWkspc/smokeTests",
                 "--disable-extensions",
                 "--extensionDevelopmentPath=${workspaceFolder}",
+                "--extensionDevelopmentPath=${workspaceFolder}/../vscode-supervisor",
                 "--extensionTestsPath=${workspaceFolder}/out/test"
             ],
             "env": {
@@ -78,7 +81,7 @@
             },
             "sourceMaps": true,
             "outFiles": ["${workspaceFolder}/out/**/*.js", "!${workspaceFolder}/**/node_modules**/*"],
-            "preLaunchTask": "Compile",
+            "preLaunchTask": "Prepare Extension + Supervisor",
             "skipFiles": ["<node_internals>/**"]
         },
         {
@@ -90,6 +93,7 @@
                 "${workspaceFolder}/src/test",
                 "--disable-extensions",
                 "--extensionDevelopmentPath=${workspaceFolder}",
+                "--extensionDevelopmentPath=${workspaceFolder}/../vscode-supervisor",
                 "--extensionTestsPath=${workspaceFolder}/out/test"
             ],
             "env": {
@@ -97,7 +101,7 @@
             },
             "sourceMaps": true,
             "outFiles": ["${workspaceFolder}/out/**/*.js", "!${workspaceFolder}/**/node_modules**/*"],
-            "preLaunchTask": "Compile",
+            "preLaunchTask": "Prepare Extension + Supervisor",
             "skipFiles": ["<node_internals>/**"]
         },
         {
@@ -109,6 +113,7 @@
                 "${workspaceFolder}/src/test",
                 "--disable-extensions",
                 "--extensionDevelopmentPath=${workspaceFolder}",
+                "--extensionDevelopmentPath=${workspaceFolder}/../vscode-supervisor",
                 "--extensionTestsPath=${workspaceFolder}/out/test"
             ],
             "env": {
@@ -116,7 +121,7 @@
             },
             "sourceMaps": true,
             "outFiles": ["${workspaceFolder}/out/**/*.js", "!${workspaceFolder}/**/node_modules**/*"],
-            "preLaunchTask": "preTestJediLSP",
+            "preLaunchTask": "Prepare Jedi LSP + Supervisor",
             "skipFiles": ["<node_internals>/**"]
         },
         {
@@ -128,6 +133,7 @@
                 "${workspaceFolder}/src/testMultiRootWkspc/multi.code-workspace",
                 "--disable-extensions",
                 "--extensionDevelopmentPath=${workspaceFolder}",
+                "--extensionDevelopmentPath=${workspaceFolder}/../vscode-supervisor",
                 "--extensionTestsPath=${workspaceFolder}/out/test"
             ],
             "env": {
@@ -136,7 +142,7 @@
             "sourceMaps": true,
             "smartStep": true,
             "outFiles": ["${workspaceFolder}/out/**/*", "!${workspaceFolder}/**/node_modules**/*"],
-            "preLaunchTask": "Compile",
+            "preLaunchTask": "Prepare Extension + Supervisor",
             "skipFiles": ["<node_internals>/**"]
         },
         {
@@ -259,7 +265,7 @@
     "compounds": [
         {
             "name": "Debug Python and Extension",
-            "configurations": ["Python: Attach Listen", "Extension"]
+            "configurations": ["Python: Attach Listen", "Extension + Local Supervisor"]
         }
     ]
 }

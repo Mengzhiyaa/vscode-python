@@ -9,6 +9,17 @@
     "positron": {
         "binaryDependencies": {
             "apk": "0.1.0"
+        },
+        "binaryChecksums": {
+            "apk": {
+                "darwin-arm64": "sha256:1f14c7a243571781918adb9fc1ebb849b6e3e123cf042048daa324a07c2ec1ef",
+                "darwin-universal": "sha256:fbd4e08b1a8499eb292bf16adb3c4db30301cda9dc5aecb94dabcad117ca28aa",
+                "darwin-x64": "sha256:53b625f72711984f09b61976ff2a7e78e67841d43f8103a015826447673dcb53",
+                "linux-arm64": "sha256:8652ece57568d9b00b9fd7daa4f0ae471d09e9e64cba72d91c15ec44756f20ad",
+                "linux-x64": "sha256:34046dab64de12b79f45c5b5987bde97139184c7a039ff2d0eff5c2164966154",
+                "windows-arm64": "sha256:224556c85782c402df8e5cee67bb9f4e7559d5790f2204ab8b17eadad9ecdec2",
+                "windows-x64": "sha256:bbd809868c68a537192cc0f58d4f05b77ddb3964a76a8b8ffaefdf9d24210fbe"
+            }
         }
     },
     "capabilities": {
@@ -52,7 +63,7 @@
         "theme": "dark"
     },
     "engines": {
-        "vscode": "^1.95.0"
+        "vscode": "^1.105.0"
     },
     "enableTelemetry": false,
     "keywords": [
@@ -1743,7 +1754,7 @@
         }
     },
     "scripts": {
-        "package": "gulp clean && gulp prePublishBundle && vsce package -o ms-python-insiders.vsix",
+        "package": "npm run install:apk && gulp clean && gulp prePublishBundle && vsce package -o ms-python-insiders.vsix && npm run verify:apk-vsix -- ms-python-insiders.vsix",
         "prePublish": "gulp clean && gulp prePublishNonBundle",
         "compile": "tsc -watch -p ./",
         "compileApi": "node ./node_modules/typescript/lib/tsc.js -b ./pythonExtensionApi/tsconfig.json",
@@ -1782,7 +1793,9 @@
         "verifyBundle": "gulp verifyBundle",
         "webpack": "webpack",
         "sync:supervisor-api": "node scripts/sync-supervisor-api.mjs",
-        "install:apk": "node scripts/install-apk.mjs"
+        "verify:supervisor-api": "node scripts/sync-supervisor-api.mjs --check",
+        "install:apk": "node scripts/install-apk.mjs",
+        "verify:apk-vsix": "node scripts/verify-apk-vsix.mjs"
     },
     "dependencies": {
         "@iarna/toml": "^3.0.0",
