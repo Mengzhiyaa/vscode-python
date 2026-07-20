@@ -4,6 +4,7 @@ import { IInterpreterService } from '../interpreter/contracts';
 import { IServiceContainer } from '../ioc/types';
 import { traceWarn } from '../logging';
 import { PythonBinaryProvider } from './binaryProvider';
+import { registerSupervisorEnvironmentContributions } from './environmentContributions';
 import { PythonLanguageContribution } from './pythonLanguageContribution';
 import type { ILanguageWebviewAssets, ISupervisorFrameworkApi } from './types/supervisor-api';
 
@@ -50,6 +51,9 @@ export async function activateSupervisor(
             languageContribution: contribution,
             webviewAssets: createSupervisorWebviewAssets(context),
         });
+        if (typeof api.registerEnvironmentContributions === 'function') {
+            context.subscriptions.push(registerSupervisorEnvironmentContributions(context, api));
+        }
     })().catch((error) => {
         supervisorRegistrationPromise = undefined;
         throw error;

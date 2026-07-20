@@ -6,6 +6,7 @@ import * as path from 'path';
 import { copy, createDirectory, getConfiguration, onDidChangeConfiguration } from '../common/vscodeApis/workspaceApis';
 import { EXTENSION_ROOT_DIR } from '../constants';
 import { Interpreters } from '../common/utils/localize';
+import { notifySupervisorEnvironmentContributionsChanged } from '../supervisor/environmentContributions';
 
 async function applyPythonStartupSetting(context: ExtensionContext): Promise<void> {
     const config = getConfiguration('python');
@@ -34,6 +35,7 @@ async function applyPythonStartupSetting(context: ExtensionContext): Promise<voi
             Interpreters.shellIntegrationDisabledEnvVarCollectionDescription,
         );
     }
+    notifySupervisorEnvironmentContributionsChanged();
 }
 
 export async function registerPythonStartup(context: ExtensionContext): Promise<void> {
