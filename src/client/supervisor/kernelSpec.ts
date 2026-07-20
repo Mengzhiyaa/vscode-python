@@ -1,3 +1,4 @@
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
@@ -12,7 +13,16 @@ type ApkPathCandidate = {
     source: string;
     path: string | undefined;
     explicit: boolean;
+    bundled?: boolean;
 };
+
+type ApkBinaryManifest = {
+    version?: string;
+    platform?: string;
+    binaryChecksum?: string;
+};
+
+type ApkLog = Pick<vscode.LogOutputChannel, 'info' | 'warn' | 'error'>;
 
 function getApkExecutableName(): string {
     return process.platform === 'win32' ? 'apk.exe' : 'apk';
@@ -61,15 +71,16 @@ function getApkPathCandidates(context: vscode.ExtensionContext): ApkPathCandidat
             source: 'supervisor binary install',
             path: path.join(context.extensionPath, 'resources', 'apk', executableName),
             explicit: false,
+            bundled: true,
         },
         {
             source: 'local apk release build',
-            path: path.resolve(context.extensionPath, '..', '..', '..', 'apk', 'target', 'release', executableName),
+            path: path.resolve(context.extensionPath, '..', 'apk', 'target', 'release', executableName),
             explicit: false,
         },
         {
             source: 'local apk debug build',
-            path: path.resolve(context.extensionPath, '..', '..', '..', 'apk', 'target', 'debug', executableName),
+            path: path.resolve(context.extensionPath, '..', 'apk', 'target', 'debug', executableName),
             explicit: false,
         },
         {
@@ -80,10 +91,47 @@ function getApkPathCandidates(context: vscode.ExtensionContext): ApkPathCandidat
     ];
 }
 
-function resolveApkBinaryPath(
-    context: vscode.ExtensionContext,
-    logChannel: vscode.LogOutputChannel,
-): string {
+function isExecutable(filePath: string): boolean {
+    try {
+        fs.accessSync(filePath, process.platform === 'win32' ? fs.constants.F_OK : fs.constants.X_OK);
+        return fs.statSync(filePath).isFile();
+    } catch {
+        return false;
+    }
+}
+
+function verifyBundledApk(context: vscode.ExtensionContext, binaryPath: string): string | undefined {
+    const manifestPath = path.join(path.dirname(binaryPath), 'manifest.json');
+    if (!fs.existsSync(manifestPath)) {
+        return `missing integrity manifest ${manifestPath}`;
+    }
+
+    let manifest: ApkBinaryManifest;
+    try {
+        manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as ApkBinaryManifest;
+    } catch (error) {
+        return `invalid integrity manifest: ${error instanceof Error ? error.message : String(error)}`;
+    }
+
+    const expectedVersion = context.extension.packageJSON?.positron?.binaryDependencies?.apk;
+    if (typeof expectedVersion !== 'string' || manifest.version !== expectedVersion) {
+        return `version mismatch (manifest=${manifest.version ?? 'missing'}, expected=${expectedVersion ?? 'missing'})`;
+    }
+
+    const checksumMatch = manifest.binaryChecksum?.match(/^sha256:([0-9a-f]{64})$/i);
+    if (!checksumMatch) {
+        return 'missing or invalid SHA-256 binary checksum';
+    }
+
+    const actualChecksum = crypto.createHash('sha256').update(fs.readFileSync(binaryPath)).digest('hex');
+    if (actualChecksum !== checksumMatch[1].toLowerCase()) {
+        return `SHA-256 mismatch (expected=${checksumMatch[1]}, actual=${actualChecksum})`;
+    }
+
+    return undefined;
+}
+
+export function resolveApkBinaryPath(context: vscode.ExtensionContext, logChannel: ApkLog): string {
     const pathCandidates = getApkPathCandidates(context);
 
     for (const candidate of pathCandidates) {
@@ -91,13 +139,24 @@ function resolveApkBinaryPath(
             continue;
         }
 
-        if (fs.existsSync(candidate.path)) {
+        if (isExecutable(candidate.path)) {
+            if (candidate.bundled) {
+                const validationError = verifyBundledApk(context, candidate.path);
+                if (validationError) {
+                    logChannel.error(
+                        `[Python Supervisor] Ignoring invalid bundled apk binary at ${candidate.path}: ${validationError}`,
+                    );
+                    continue;
+                }
+            }
             logChannel.info(`[Python Supervisor] Using apk binary from ${candidate.source}: ${candidate.path}`);
             return candidate.path;
         }
 
         if (candidate.explicit) {
-            logChannel.warn(`[Python Supervisor] Ignoring missing apk binary from ${candidate.source}: ${candidate.path}`);
+            logChannel.warn(
+                `[Python Supervisor] Ignoring missing apk binary from ${candidate.source}: ${candidate.path}`,
+            );
         }
     }
 
@@ -108,8 +167,29 @@ function resolveApkBinaryPath(
 
     throw new Error(
         `Unable to find the apk binary. Set python.supervisor.apkPath or ${APK_BINARY_ENV_VAR}. ` +
-        `Checked ${checkedPaths || 'no candidate paths'}.`,
+            `Checked ${checkedPaths || 'no candidate paths'}.`,
     );
+}
+
+export function isApkBinaryAvailable(context: vscode.ExtensionContext, logChannel?: ApkLog): boolean {
+    try {
+        resolveApkBinaryPath(
+            context,
+            logChannel ?? {
+                info: () => undefined,
+                warn: () => undefined,
+                error: () => undefined,
+            },
+        );
+        return true;
+    } catch (error) {
+        logChannel?.error(
+            `[Python Supervisor] APK is unavailable; Python runtime discovery is disabled: ${
+                error instanceof Error ? error.message : String(error)
+            }`,
+        );
+        return false;
+    }
 }
 
 function createDisplayName(installation: PythonRuntimeInstallation): string {

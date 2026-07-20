@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { IInterpreterService } from '../interpreter/contracts';
 import { EnvironmentType, PythonEnvironment } from '../pythonEnvironments/info';
-import { createApkKernelSpec } from './kernelSpec';
+import { createApkKernelSpec, isApkBinaryAvailable } from './kernelSpec';
 import { PythonLanguageLspFactory } from './pythonLsp';
 import type {
     ILanguageInstallationPickerOptions,
@@ -85,6 +85,9 @@ export class PythonRuntimeProvider implements ILanguageRuntimeProvider<PythonRun
     ) {}
 
     async *discoverInstallations(logChannel: vscode.LogOutputChannel): AsyncGenerator<PythonRuntimeInstallation> {
+        if (!isApkBinaryAvailable(this._extensionContext, logChannel)) {
+            return;
+        }
         await this.refreshInterpreters(logChannel);
         for (const interpreter of this.listInterpreterEnvironments()) {
             yield this.installationFromEnvironment(interpreter);
@@ -94,6 +97,9 @@ export class PythonRuntimeProvider implements ILanguageRuntimeProvider<PythonRun
     async resolveInitialInstallation(
         logChannel: vscode.LogOutputChannel,
     ): Promise<PythonRuntimeInstallation | undefined> {
+        if (!isApkBinaryAvailable(this._extensionContext, logChannel)) {
+            return undefined;
+        }
         await this.refreshInterpreters(logChannel);
         const resource = this.getPrimaryWorkspaceUri();
         const activeInterpreter = await this._interpreterService.getActiveInterpreter(resource);
@@ -118,6 +124,12 @@ export class PythonRuntimeProvider implements ILanguageRuntimeProvider<PythonRun
         logChannel: vscode.LogOutputChannel,
         options: ILanguageInstallationPickerOptions = {},
     ): Promise<PythonRuntimeInstallation | undefined> {
+        if (!isApkBinaryAvailable(this._extensionContext, logChannel)) {
+            void vscode.window.showErrorMessage(
+                'The APK kernel binary is unavailable or failed integrity validation. Python runtimes are disabled.',
+            );
+            return undefined;
+        }
         await this.refreshInterpreters(logChannel);
         const preselectedPath = options.preselectRuntimePath;
         const items: InterpreterQuickPickItem[] = this.listInterpreterEnvironments().map((interpreter) => {
@@ -225,6 +237,9 @@ export class PythonRuntimeProvider implements ILanguageRuntimeProvider<PythonRun
     }
 
     async validateMetadata(metadata: LanguageRuntimeMetadata): Promise<LanguageRuntimeMetadata> {
+        if (!isApkBinaryAvailable(this._extensionContext)) {
+            throw new Error('The APK kernel binary is unavailable or failed integrity validation.');
+        }
         const installation = this.restoreInstallationFromMetadata(metadata);
         if (!installation) {
             throw new Error('Python supervisor metadata is missing interpreter details.');

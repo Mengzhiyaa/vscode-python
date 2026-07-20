@@ -1,4 +1,5 @@
 import { expect } from 'chai';
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -19,8 +20,28 @@ function getExecutableName(): string {
 
 function createBinary(filePath: string): string {
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.writeFileSync(filePath, '');
+    fs.writeFileSync(filePath, 'apk-test-binary', { mode: 0o755 });
+    if (process.platform !== 'win32') {
+        fs.chmodSync(filePath, 0o755);
+    }
     return filePath;
+}
+
+function createBundledBinary(extensionPath: string): string {
+    const binaryPath = createBinary(path.join(extensionPath, 'resources', 'apk', getExecutableName()));
+    const digest = crypto.createHash('sha256').update(fs.readFileSync(binaryPath)).digest('hex');
+    fs.writeFileSync(
+        path.join(path.dirname(binaryPath), 'manifest.json'),
+        JSON.stringify({ version: '0.1.0', binaryChecksum: `sha256:${digest}` }),
+    );
+    return binaryPath;
+}
+
+function createContext(extensionPath: string): vscode.ExtensionContext {
+    return ({
+        extensionPath,
+        extension: { packageJSON: { positron: { binaryDependencies: { apk: '0.1.0' } } } },
+    } as unknown) as vscode.ExtensionContext;
 }
 
 suite('Python Supervisor - Kernel Spec', () => {
@@ -57,17 +78,20 @@ suite('Python Supervisor - Kernel Spec', () => {
 
         const configuredBinary = createBinary(path.join(extensionPath, 'configured', getExecutableName()));
         const envBinary = createBinary(path.join(extensionPath, 'env', getExecutableName()));
-        createBinary(path.join(extensionPath, 'resources', 'apk', getExecutableName()));
+        createBundledBinary(extensionPath);
         process.env[APK_BINARY_ENV_VAR] = envBinary;
         process.env.PATH = '';
 
         sinon.stub(workspaceApis, 'getConfiguration').returns({
-            get: sinon.stub().callsFake((key: string, defaultValue?: string) =>
-                key === 'supervisor.apkPath' ? configuredBinary : defaultValue),
+            get: sinon
+                .stub()
+                .callsFake((key: string, defaultValue?: string) =>
+                    key === 'supervisor.apkPath' ? configuredBinary : defaultValue,
+                ),
         } as any);
 
         const kernelSpec = await createApkKernelSpec(
-            ({ extensionPath } as unknown) as vscode.ExtensionContext,
+            createContext(extensionPath),
             installation,
             'console',
             new MockOutputChannel('python-supervisor'),
@@ -81,7 +105,7 @@ suite('Python Supervisor - Kernel Spec', () => {
         tempDirs.push(extensionPath);
 
         const envBinary = createBinary(path.join(extensionPath, 'env', getExecutableName()));
-        createBinary(path.join(extensionPath, 'resources', 'apk', getExecutableName()));
+        createBundledBinary(extensionPath);
         process.env[APK_BINARY_ENV_VAR] = envBinary;
         process.env.PATH = '';
 
@@ -90,7 +114,7 @@ suite('Python Supervisor - Kernel Spec', () => {
         } as any);
 
         const kernelSpec = await createApkKernelSpec(
-            ({ extensionPath } as unknown) as vscode.ExtensionContext,
+            createContext(extensionPath),
             installation,
             'console',
             new MockOutputChannel('python-supervisor'),
@@ -103,7 +127,7 @@ suite('Python Supervisor - Kernel Spec', () => {
         const extensionPath = fs.mkdtempSync(path.join(os.tmpdir(), 'python-supervisor-ext-'));
         tempDirs.push(extensionPath);
 
-        const installedBinary = createBinary(path.join(extensionPath, 'resources', 'apk', getExecutableName()));
+        const installedBinary = createBundledBinary(extensionPath);
         delete process.env[APK_BINARY_ENV_VAR];
         process.env.PATH = '';
 
@@ -112,13 +136,62 @@ suite('Python Supervisor - Kernel Spec', () => {
         } as any);
 
         const kernelSpec = await createApkKernelSpec(
-            ({ extensionPath } as unknown) as vscode.ExtensionContext,
+            createContext(extensionPath),
             installation,
             'console',
             new MockOutputChannel('python-supervisor'),
         );
 
         expect(kernelSpec.argv[0]).to.equal(installedBinary);
+    });
+
+    test('uses the adjacent apk repository build during extension development', async () => {
+        const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'python-supervisor-workspace-'));
+        const extensionPath = path.join(workspacePath, 'vscode-python');
+        fs.mkdirSync(extensionPath);
+        tempDirs.push(workspacePath);
+
+        const localBinary = createBinary(path.join(workspacePath, 'apk', 'target', 'release', getExecutableName()));
+        delete process.env[APK_BINARY_ENV_VAR];
+        process.env.PATH = '';
+
+        sinon.stub(workspaceApis, 'getConfiguration').returns({
+            get: sinon.stub().returns(''),
+        } as any);
+
+        const kernelSpec = await createApkKernelSpec(
+            createContext(extensionPath),
+            installation,
+            'console',
+            new MockOutputChannel('python-supervisor'),
+        );
+
+        expect(kernelSpec.argv[0]).to.equal(localBinary);
+    });
+
+    test('rejects a bundled apk whose SHA-256 no longer matches its manifest', async () => {
+        const extensionPath = fs.mkdtempSync(path.join(os.tmpdir(), 'python-supervisor-ext-'));
+        tempDirs.push(extensionPath);
+
+        const installedBinary = createBundledBinary(extensionPath);
+        fs.appendFileSync(installedBinary, '-tampered');
+        const logChannel = new MockOutputChannel('python-supervisor');
+        delete process.env[APK_BINARY_ENV_VAR];
+        process.env.PATH = '';
+
+        sinon.stub(workspaceApis, 'getConfiguration').returns({
+            get: sinon.stub().returns(''),
+        } as any);
+
+        let error: Error | undefined;
+        try {
+            await createApkKernelSpec(createContext(extensionPath), installation, 'console', logChannel);
+        } catch (ex) {
+            error = ex as Error;
+        }
+
+        expect(error?.message).to.contain('Unable to find the apk binary');
+        expect(logChannel.output).to.contain('SHA-256 mismatch');
     });
 
     test('reports checked paths when no apk binary can be found', async () => {
@@ -132,24 +205,24 @@ suite('Python Supervisor - Kernel Spec', () => {
         tempDirs.push(process.env.PATH);
 
         sinon.stub(workspaceApis, 'getConfiguration').returns({
-            get: sinon.stub().callsFake((key: string, defaultValue?: string) =>
-                key === 'supervisor.apkPath' ? missingConfiguredPath : defaultValue),
+            get: sinon
+                .stub()
+                .callsFake((key: string, defaultValue?: string) =>
+                    key === 'supervisor.apkPath' ? missingConfiguredPath : defaultValue,
+                ),
         } as any);
 
         let error: Error | undefined;
         try {
-            await createApkKernelSpec(
-                ({ extensionPath } as unknown) as vscode.ExtensionContext,
-                installation,
-                'console',
-                logChannel,
-            );
+            await createApkKernelSpec(createContext(extensionPath), installation, 'console', logChannel);
         } catch (ex) {
             error = ex as Error;
         }
 
         expect(error?.message).to.contain('Unable to find the apk binary');
         expect(error?.message).to.contain(`python.supervisor.apkPath: ${missingConfiguredPath}`);
-        expect(logChannel.output).to.contain(`Ignoring missing apk binary from python.supervisor.apkPath: ${missingConfiguredPath}`);
+        expect(logChannel.output).to.contain(
+            `Ignoring missing apk binary from python.supervisor.apkPath: ${missingConfiguredPath}`,
+        );
     });
 });

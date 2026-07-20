@@ -7,7 +7,37 @@ on:
   workflow_dispatch:
 
 jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      SUPERVISOR_CHECKOUT_PATH: .deps/vscode-supervisor
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Checkout Supervisor API source
+        uses: actions/checkout@v4
+        with:
+          repository: Mengzhiyaa/vscode-supervisor
+          path: ${{ env.SUPERVISOR_CHECKOUT_PATH }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify Supervisor API sync
+        run: npm run verify:supervisor-api -- $SUPERVISOR_CHECKOUT_PATH
+
   package:
+    needs: verify
     strategy:
       fail-fast: false
       matrix:
@@ -15,33 +45,21 @@ jobs:
           - runner: ubuntu-latest
             target: linux-x64
             cargo_target: x86_64-unknown-linux-musl
-            target_os: linux
-            target_arch: x64
           - runner: ubuntu-latest
             target: linux-arm64
             cargo_target: aarch64-unknown-linux-gnu
-            target_os: linux
-            target_arch: arm64
           - runner: macos-15
             target: darwin-x64
             cargo_target: x86_64-apple-darwin
-            target_os: darwin
-            target_arch: x64
           - runner: macos-latest
             target: darwin-arm64
             cargo_target: aarch64-apple-darwin
-            target_os: darwin
-            target_arch: arm64
           - runner: windows-latest
             target: win32-x64
             cargo_target: x86_64-pc-windows-msvc
-            target_os: windows
-            target_arch: x64
           - runner: windows-latest
             target: win32-arm64
             cargo_target: aarch64-pc-windows-msvc
-            target_os: windows
-            target_arch: arm64
 
     runs-on: ${{ matrix.runner }}
     permissions:
@@ -62,14 +80,6 @@ jobs:
             Cargo.toml
             Cargo.lock
           sparse-checkout-cone-mode: false
-
-      - name: Install APK binary
-        env:
-          TARGET_OS: ${{ matrix.target_os }}
-          TARGET_ARCH: ${{ matrix.target_arch }}
-        run: |
-          npm ci
-          npm run install:apk -- --retry 3
 
       - name: Build VSIX
         uses: ./.github/actions/build-vsix

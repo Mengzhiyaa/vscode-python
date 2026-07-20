@@ -69,6 +69,12 @@ runs:
       run: npm ci --prefer-offline
       shell: bash
 
+    - name: Install target APK binary
+      run: npm run install:apk -- --platform "${VSIX_TARGET}" --retry 3
+      shell: bash
+      env:
+        VSIX_TARGET: ${{ inputs.vsix_target }}
+
     - name: Update optional extension dependencies
       run: npm run addExtensionPackDependencies
       shell: bash
@@ -81,6 +87,12 @@ runs:
 
     - name: Build VSIX
       run: npx vsce package --target "${VSIX_TARGET}" --out ms-python-insiders.vsix --pre-release
+      shell: bash
+      env:
+        VSIX_TARGET: ${{ inputs.vsix_target }}
+
+    - name: Verify packaged APK binary
+      run: npm run verify:apk-vsix -- ms-python-insiders.vsix --platform "${VSIX_TARGET}"
       shell: bash
       env:
         VSIX_TARGET: ${{ inputs.vsix_target }}

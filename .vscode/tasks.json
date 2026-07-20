@@ -19,6 +19,32 @@
             }
         },
         {
+            "label": "Verify Local Supervisor API",
+            "type": "shell",
+            "command": "npm",
+            "args": ["run", "verify:supervisor-api", "--", "../vscode-supervisor"],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Build Local Supervisor",
+            "type": "shell",
+            "command": "npm",
+            "args": ["run", "build"],
+            "options": {
+                "cwd": "${workspaceFolder}/../vscode-supervisor"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Prepare Extension + Supervisor",
+            "dependsOrder": "sequence",
+            "dependsOn": ["Verify Local Supervisor API", "Build Local Supervisor", "Compile"],
+            "problemMatcher": []
+        },
+        {
             "label": "Run Unit Tests",
             "type": "npm",
             "script": "test:unittests",
@@ -32,6 +58,12 @@
             "script": "preTestJediLSP",
             "problemMatcher": [],
             "label": "preTestJediLSP"
+        },
+        {
+            "label": "Prepare Jedi LSP + Supervisor",
+            "dependsOrder": "sequence",
+            "dependsOn": ["Verify Local Supervisor API", "Build Local Supervisor", "preTestJediLSP"],
+            "problemMatcher": []
         },
         {
             "type": "npm",
