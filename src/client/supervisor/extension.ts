@@ -12,6 +12,17 @@ const SUPERVISOR_EXTENSION_ID = 'mengzhiya.vscode-supervisor';
 
 let supervisorRegistrationPromise: Promise<void> | undefined;
 
+function ensureCurrentSupervisorApi(api: ISupervisorFrameworkApi): void {
+    if (
+        typeof api.registerLanguageSupport !== 'function' ||
+        typeof api.registerEnvironmentContributions !== 'function'
+    ) {
+        throw new Error(
+            `Extension '${SUPERVISOR_EXTENSION_ID}' exposes an incompatible API. Update vscode-supervisor and retry.`,
+        );
+    }
+}
+
 export function createSupervisorWebviewAssets(context: IExtensionContext): ILanguageWebviewAssets {
     const supervisorResourceRoot = vscode.Uri.joinPath(context.extensionUri, 'resources', 'supervisor');
     const syntaxRoot = vscode.Uri.joinPath(context.extensionUri, 'syntaxes');
@@ -42,6 +53,7 @@ export async function activateSupervisor(
         }
 
         const api = await supervisorExtension.activate();
+        ensureCurrentSupervisorApi(api);
         const interpreterService = serviceContainer.get<IInterpreterService>(IInterpreterService);
         const contribution = new PythonLanguageContribution(context, api, interpreterService, serviceContainer);
         const binaryProvider = new PythonBinaryProvider(context);
@@ -51,9 +63,7 @@ export async function activateSupervisor(
             languageContribution: contribution,
             webviewAssets: createSupervisorWebviewAssets(context),
         });
-        if (typeof api.registerEnvironmentContributions === 'function') {
-            context.subscriptions.push(registerSupervisorEnvironmentContributions(context, api));
-        }
+        context.subscriptions.push(registerSupervisorEnvironmentContributions(context, api));
     })().catch((error) => {
         supervisorRegistrationPromise = undefined;
         throw error;

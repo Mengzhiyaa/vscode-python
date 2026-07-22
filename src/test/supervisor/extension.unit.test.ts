@@ -41,7 +41,7 @@ suite('Python Supervisor - Extension Webview Assets', () => {
         );
     });
 
-    test('registers Python supervisor support with a binary provider and retries after failures', async () => {
+    test('rejects stale APIs and retries Python supervisor registration', async () => {
         const extensionUri = vscode.Uri.file('/tmp/python-extension');
         const replaceEnvironmentVariable = 1 as vscode.EnvironmentVariableMutatorType;
         let startupValue = '/tmp/pythonrc.py';
@@ -69,22 +69,22 @@ suite('Python Supervisor - Extension Webview Assets', () => {
                 },
             },
         } as unknown) as vscode.ExtensionContext;
-        const registerLanguageSupport = sinon.stub();
+        const registerLanguageSupport = sinon.stub().resolves();
         const environmentRegistrationDisposals = [sinon.spy(), sinon.spy()];
         const registerEnvironmentContributions = sinon.stub();
         environmentRegistrationDisposals.forEach((dispose, index) => {
             registerEnvironmentContributions.onCall(index).returns(new vscode.Disposable(dispose));
         });
-        registerLanguageSupport.onFirstCall().rejects(new Error('register failed'));
-        registerLanguageSupport.onSecondCall().resolves();
 
         const supervisorApi = {
             registerLanguageSupport,
             registerEnvironmentContributions,
         };
         const supervisorExtension = {
-            activate: sinon.stub().resolves(supervisorApi),
+            activate: sinon.stub(),
         };
+        supervisorExtension.activate.onFirstCall().resolves({ registerLanguageSupport });
+        supervisorExtension.activate.onSecondCall().resolves(supervisorApi);
         const serviceContainer = {
             get: sinon.stub().returns({}),
         };
@@ -98,15 +98,16 @@ suite('Python Supervisor - Extension Webview Assets', () => {
             firstError = error as Error;
         }
 
-        expect(firstError?.message).to.equal('register failed');
+        expect(firstError?.message).to.contain('exposes an incompatible API');
+        sinon.assert.notCalled(registerLanguageSupport);
 
         await activateSupervisor(context, serviceContainer as any);
         await activateSupervisor(context, serviceContainer as any);
 
         sinon.assert.calledTwice(supervisorExtension.activate);
-        sinon.assert.calledTwice(registerLanguageSupport);
+        sinon.assert.calledOnce(registerLanguageSupport);
 
-        const registration = registerLanguageSupport.secondCall.args[0];
+        const registration = registerLanguageSupport.firstCall.args[0];
         expect(registration.runtimeProvider.languageId).to.equal('python');
         expect(registration.binaryProvider.ownerId).to.equal('python');
         expect(registration.binaryProvider.getBinaryDefinitions().apk.installDir).to.equal(
