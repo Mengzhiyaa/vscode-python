@@ -52,6 +52,7 @@ export interface ConsoleSettings {
     fontFamily: string;
     fontSize: number;
     lineHeight: number;
+    showResourceMonitor: boolean;
 }
 export declare enum RuntimeCodeExecutionMode {
     Interactive = "interactive",
@@ -603,6 +604,80 @@ export interface ILanguageSupportRegistration<TInstallation = unknown> {
 export interface ILanguageRuntimeRegistration<TInstallation = unknown> {
     readonly provider: ILanguageRuntimeProvider<TInstallation>;
 }
+export interface IDataExplorerBackendRpcRequest {
+    readonly method: string;
+    readonly uri: string;
+    readonly params: Readonly<Record<string, unknown>>;
+}
+export interface IDataExplorerBackendEvent {
+    readonly method: 'schema_update' | 'data_update' | 'return_column_profiles' | 'close';
+    readonly uri: string;
+    readonly params?: unknown;
+}
+export interface IDataExplorerBackendTransport extends vscode.Disposable {
+    readonly datasetId?: string;
+    readonly clientId?: string;
+    readonly onDidEmitEvent?: vscode.Event<IDataExplorerBackendEvent>;
+    handleRpc(request: IDataExplorerBackendRpcRequest): Promise<unknown>;
+}
+export interface IDataExplorerBackendProvider {
+    readonly id: string;
+    canHandle(uri: vscode.Uri): boolean | Promise<boolean>;
+    open(uri: vscode.Uri): Promise<IDataExplorerBackendTransport>;
+}
+export type DataConnectionParameterValues = Record<string, boolean | number | string>;
+export interface IDataConnectionNode {
+    readonly handle: number;
+    readonly name: string;
+    readonly kind: string;
+    readonly dtype?: string;
+    readonly hasChildren?: boolean;
+    readonly containsData?: boolean;
+}
+export interface IDataConnectionHandle extends vscode.Disposable {
+    isConnected(): Promise<boolean>;
+    getChildren(): Promise<readonly IDataConnectionNode[]>;
+    nodeGetChildren(nodeHandle: number): Promise<readonly IDataConnectionNode[]>;
+    nodePreview(nodeHandle: number): Promise<void>;
+    disconnect(): Promise<void>;
+}
+export interface IDataConnectionParameter {
+    readonly id: string;
+    readonly label: string;
+    readonly type: 'boolean' | 'number' | 'string' | 'password' | 'option';
+    readonly required?: boolean;
+    readonly secret?: boolean;
+    readonly defaultValue?: boolean | number | string;
+    readonly options?: readonly string[];
+    readonly placeholder?: string;
+}
+export interface IDataConnectionDriver {
+    readonly id: string;
+    readonly metadata: {
+        readonly id: string;
+        readonly name: string;
+        readonly description?: string;
+        readonly iconSvg?: string;
+        readonly mechanisms: readonly {
+            readonly id: string;
+            readonly label: string;
+            readonly description?: string;
+            readonly parameters: readonly IDataConnectionParameter[];
+        }[];
+        readonly supportedLanguageIds?: readonly string[];
+    };
+    connect(mechanismId: string, params: DataConnectionParameterValues): Promise<IDataConnectionHandle>;
+}
+export interface IDataConnectionProfile {
+    readonly id: string;
+    readonly createdAt: number;
+    lastUsedAt?: number;
+    readonly driverId: string;
+    connectionName: string;
+    mechanismId: string;
+    parameterValues: DataConnectionParameterValues;
+    autoConnect?: boolean;
+}
 export interface ISupervisorFrameworkApi {
     readonly runtimeSessionService: IRuntimeSessionService;
     readonly runtimeStartupService: IRuntimeStartupService;
@@ -616,6 +691,11 @@ export interface ISupervisorFrameworkApi {
     registerLanguageRuntime<TInstallation = unknown>(registration: ILanguageRuntimeRegistration<TInstallation> | ILanguageSupportRegistration<TInstallation> | ILanguageRuntimeProvider<TInstallation>): Promise<void>;
     registerLspFactory(factory: ILanguageLspFactory): Promise<void>;
     registerBinaryProvider(provider: IBinaryProvider): Promise<void>;
+    registerDataExplorerBackendProvider(provider: IDataExplorerBackendProvider): vscode.Disposable;
+    openDataExplorer(uri: vscode.Uri, providerId?: string): Promise<void>;
+    registerDataConnectionDriver(driver: IDataConnectionDriver): vscode.Disposable;
+    addUpdateDataConnectionProfile(profile: IDataConnectionProfile, connect?: boolean): Promise<void>;
+    connectDataConnectionProfile(profileId: string): Promise<void>;
     registerEnvironmentContributions(extensionId: string, actions: readonly ISupervisorEnvironmentVariableAction[]): vscode.Disposable;
 }
 export interface IDiscoveredLanguageRuntime<TInstallation = unknown> {
