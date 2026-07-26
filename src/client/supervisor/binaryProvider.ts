@@ -2,15 +2,12 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 
 import type { BinaryDefinition, IBinaryProvider } from './types/supervisor-api';
-import { PYTHON_LANGUAGE_ID } from './runtimeProvider';
 
 function getApkBinaryName(): string {
     return process.platform === 'win32' ? 'apk.exe' : 'apk';
 }
 
 export class PythonBinaryProvider implements IBinaryProvider {
-    readonly ownerId = PYTHON_LANGUAGE_ID;
-
     constructor(private readonly _extensionContext: vscode.ExtensionContext) {}
 
     getBinaryDefinitions(): Readonly<Record<string, BinaryDefinition>> {
