@@ -23,7 +23,6 @@ suite('Python Supervisor - Binary Provider', () => {
         const definitions = provider.getBinaryDefinitions();
         const apk = definitions.apk;
 
-        expect(provider.ownerId).to.equal('python');
         expect(apk.repo).to.equal('Mengzhiyaa/apk-build');
         expect(apk.version).to.equal('0.1.0');
         expect(apk.binaryName).to.equal(process.platform === 'win32' ? 'apk.exe' : 'apk');

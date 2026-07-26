@@ -269,16 +269,25 @@ export interface ILanguageRuntimeProvider<TInstallation = unknown> {
     shouldRecommendForWorkspace?(): Promise<boolean>;
     getSessionIdPrefix?(sessionMode: LanguageSessionMode): string;
 }
+export type BinaryArchiveType = 'zip' | 'tar.gz';
 export interface BinaryDefinition {
     repo: string;
+    /**
+     * GitHub release tag used to download the binary.
+     */
     version?: string;
+    /**
+     * Version emitted by `<binary> --version` when it differs from the
+     * GitHub release tag.
+     */
+    reportedVersion?: string;
     binaryName: string;
     archivePattern: (version: string, platform: string) => string;
+    archiveType?: BinaryArchiveType;
     installDir: string;
     platformOverride?: (platform: string) => string;
 }
 export interface IBinaryProvider {
-    readonly ownerId: string;
     getBinaryDefinitions(): Readonly<Record<string, BinaryDefinition>>;
 }
 export interface Utf8Position {
@@ -297,6 +306,7 @@ export interface ICodeExecutionAttribution {
     source: string;
     fileUri?: vscode.Uri;
     lineNumber?: number;
+    codeLocation?: Utf8Location;
     metadata?: Record<string, unknown>;
 }
 export interface RuntimeCodeExecutionOptions {
@@ -690,7 +700,6 @@ export interface ISupervisorFrameworkApi {
     registerLanguageSupport<TInstallation = unknown>(registration: ILanguageSupportRegistration<TInstallation>): Promise<void>;
     registerLanguageRuntime<TInstallation = unknown>(registration: ILanguageRuntimeRegistration<TInstallation> | ILanguageSupportRegistration<TInstallation> | ILanguageRuntimeProvider<TInstallation>): Promise<void>;
     registerLspFactory(factory: ILanguageLspFactory): Promise<void>;
-    registerBinaryProvider(provider: IBinaryProvider): Promise<void>;
     registerDataExplorerBackendProvider(provider: IDataExplorerBackendProvider): vscode.Disposable;
     openDataExplorer(uri: vscode.Uri, providerId?: string): Promise<void>;
     registerDataConnectionDriver(driver: IDataConnectionDriver): vscode.Disposable;

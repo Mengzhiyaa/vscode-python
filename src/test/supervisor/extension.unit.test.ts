@@ -109,7 +109,6 @@ suite('Python Supervisor - Extension Webview Assets', () => {
 
         const registration = registerLanguageSupport.firstCall.args[0];
         expect(registration.runtimeProvider.languageId).to.equal('python');
-        expect(registration.binaryProvider.ownerId).to.equal('python');
         expect(registration.binaryProvider.getBinaryDefinitions().apk.installDir).to.equal(
             path.join(context.extensionPath, 'resources', 'apk'),
         );
