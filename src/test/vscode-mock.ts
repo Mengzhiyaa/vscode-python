@@ -31,6 +31,38 @@ class MockClipboard {
         this.text = value;
     }
 }
+
+class MockNotebookCellOutputItem implements vscode.NotebookCellOutputItem {
+    static text(value: string, mime: string = 'text/plain'): vscode.NotebookCellOutputItem {
+        return new MockNotebookCellOutputItem(Buffer.from(value), mime);
+    }
+
+    static json(value: unknown, mime: string = 'application/json'): vscode.NotebookCellOutputItem {
+        return new MockNotebookCellOutputItem(Buffer.from(JSON.stringify(value)), mime);
+    }
+
+    static stdout(value: string): vscode.NotebookCellOutputItem {
+        return new MockNotebookCellOutputItem(Buffer.from(value), 'application/vnd.code.notebook.stdout');
+    }
+
+    static stderr(value: string): vscode.NotebookCellOutputItem {
+        return new MockNotebookCellOutputItem(Buffer.from(value), 'application/vnd.code.notebook.stderr');
+    }
+
+    static error(value: Error): vscode.NotebookCellOutputItem {
+        return new MockNotebookCellOutputItem(
+            Buffer.from(JSON.stringify({ name: value.name, message: value.message, stack: value.stack })),
+            'application/vnd.code.notebook.error',
+        );
+    }
+
+    constructor(public data: Uint8Array, public mime: string) {}
+}
+
+class MockNotebookCellOutput implements vscode.NotebookCellOutput {
+    constructor(public items: vscode.NotebookCellOutputItem[], public metadata?: { [key: string]: any }) {}
+}
+
 export function initialize() {
     generateMock('workspace');
     generateMock('window');
@@ -85,6 +117,8 @@ mockedVSCode.CodeAction = vscodeMocks.CodeAction;
 mockedVSCode.TestMessage = vscodeMocks.TestMessage;
 mockedVSCode.Location = vscodeMocks.Location;
 mockedVSCode.EventEmitter = vscodeMocks.EventEmitter;
+mockedVSCode.NotebookCellOutput = MockNotebookCellOutput;
+mockedVSCode.NotebookCellOutputItem = MockNotebookCellOutputItem;
 mockedVSCode.CancellationTokenSource = vscodeMocks.CancellationTokenSource;
 mockedVSCode.CompletionItemKind = vscodeMocks.CompletionItemKind;
 mockedVSCode.SymbolKind = vscodeMocks.SymbolKind;

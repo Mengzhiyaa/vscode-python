@@ -9,9 +9,12 @@ import { PythonLanguageLspFactory } from './pythonLsp';
 import type {
     ILanguageInstallationPickerOptions,
     ILanguageRuntimeProvider,
+    ILanguageRuntimeSession,
     JupyterKernelSpec,
     LanguageRuntimeMetadata,
     LanguageSessionMode,
+    RuntimeCodeExecutionMode,
+    RuntimeErrorBehavior,
 } from './types/supervisor-api';
 
 export const PYTHON_LANGUAGE_ID = 'python';
@@ -234,6 +237,21 @@ export class PythonRuntimeProvider implements ILanguageRuntimeProvider<PythonRun
             envType: EnvironmentType.Unknown,
             version: metadata.languageVersion,
         };
+    }
+
+    async setWorkingDirectory(session: ILanguageRuntimeSession, workingDirectory: string): Promise<void> {
+        await session.executeAndWait(
+            [
+                'import os as _vscode_python_os',
+                `_vscode_python_os.chdir(${JSON.stringify(workingDirectory)})`,
+                'del _vscode_python_os',
+            ].join('\n'),
+            {
+                mode: 'silent' as RuntimeCodeExecutionMode,
+                errorBehavior: 'stop' as RuntimeErrorBehavior,
+                attribution: { source: 'python.supervisor.setWorkingDirectory' },
+            },
+        );
     }
 
     async validateMetadata(metadata: LanguageRuntimeMetadata): Promise<LanguageRuntimeMetadata> {

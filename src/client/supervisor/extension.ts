@@ -15,6 +15,7 @@ let supervisorRegistrationPromise: Promise<void> | undefined;
 function ensureCurrentSupervisorApi(api: ISupervisorFrameworkApi): void {
     if (
         typeof api.registerLanguageSupport !== 'function' ||
+        typeof api.registerNotebookController !== 'function' ||
         typeof api.registerEnvironmentContributions !== 'function'
     ) {
         throw new Error(

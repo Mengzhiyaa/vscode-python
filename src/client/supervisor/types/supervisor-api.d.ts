@@ -266,6 +266,11 @@ export interface ILanguageRuntimeProvider<TInstallation = unknown> {
     validateMetadata?(metadata: LanguageRuntimeMetadata): Promise<LanguageRuntimeMetadata>;
     validateSession?(sessionId: string): Promise<boolean>;
     restoreInstallationFromMetadata?(metadata: LanguageRuntimeMetadata): TInstallation | undefined;
+    /**
+     * Changes a live session's working directory using language-owned logic.
+     * The common supervisor deliberately does not assume an R-style `setwd()`.
+     */
+    setWorkingDirectory?(session: ILanguageRuntimeSession, workingDirectory: string): Promise<void>;
     shouldRecommendForWorkspace?(): Promise<boolean>;
     getSessionIdPrefix?(sessionMode: LanguageSessionMode): string;
 }
@@ -318,6 +323,108 @@ export interface EvaluateCodeResult {
     result: any;
     output: string;
 }
+/**
+ * Public runtime message envelope for notebook/controller integrations.
+ * Message-specific fields (for example data, text, or original_message) are
+ * preserved as additional properties.
+ */
+export interface RuntimeProtocolMessage {
+    id: string;
+    event_clock: number;
+    parent_id: string;
+    when: string;
+    type: string;
+    metadata?: Record<string, unknown>;
+    buffers?: Array<Uint8Array>;
+    data?: Record<string, unknown>;
+    output_id?: string;
+    text?: string;
+    name?: string;
+    original_message?: RuntimeProtocolMessage;
+}
+export interface RuntimeStreamMessage extends RuntimeProtocolMessage {
+    name: string;
+    text: string;
+}
+export interface RuntimeInputMessage extends RuntimeProtocolMessage {
+    code: string;
+    execution_count: number;
+}
+export interface RuntimeErrorMessage extends RuntimeProtocolMessage {
+    name: string;
+    message: string;
+    traceback: string[];
+}
+export interface RuntimeOutputMessage extends RuntimeProtocolMessage {
+    kind: string;
+    data: Record<string, unknown>;
+    outputMetadata?: Record<string, unknown>;
+    output_id?: string;
+    execution_count?: number;
+}
+export interface RuntimeResultMessage extends RuntimeOutputMessage {
+    execution_count: number;
+}
+export interface RuntimeStateMessage extends RuntimeProtocolMessage {
+    state: string;
+}
+export interface RuntimePromptMessage extends RuntimeProtocolMessage {
+    prompt: string;
+    password: boolean;
+}
+export interface RuntimeClearOutputMessage extends RuntimeProtocolMessage {
+    wait: boolean;
+}
+export interface RuntimeUpdateOutputMessage extends RuntimeProtocolMessage {
+    kind: string;
+    data: Record<string, unknown>;
+    output_id: string;
+}
+export interface RuntimeIPyWidgetMessage extends RuntimeProtocolMessage {
+    original_message: RuntimeProtocolMessage;
+}
+export interface RuntimeDebugProtocolEvent {
+    seq: number;
+    type: 'event';
+    event: string;
+    body?: Record<string, unknown>;
+}
+export interface RuntimeDebugProtocolResponse {
+    seq: number;
+    type: 'response';
+    request_seq: number;
+    success: boolean;
+    command: string;
+    message?: string;
+    body?: Record<string, unknown>;
+}
+export interface RuntimeDebugEventMessage extends RuntimeProtocolMessage {
+    content: RuntimeDebugProtocolEvent;
+}
+export interface RuntimeDebugReplyMessage extends RuntimeProtocolMessage {
+    content: RuntimeDebugProtocolResponse;
+}
+export interface RuntimeOutputRendererContext {
+    readonly session: ILanguageRuntimeSession;
+    readonly outputKind: string;
+}
+export interface RuntimeRenderedOutput {
+    readonly target: 'viewer' | 'plot';
+    readonly title?: string;
+    readonly uri?: vscode.Uri;
+    readonly html?: string;
+}
+/**
+ * Extension-host bridge for outputs that require renderer/preload logic.
+ * Renderer extensions retain ownership of loading scripts and interpreting
+ * their MIME payload; Supervisor owns the resulting Viewer/Plots surface.
+ */
+export interface IRuntimeOutputRenderer {
+    readonly id: string;
+    readonly mimeTypes?: readonly string[];
+    readonly outputKinds?: readonly string[];
+    render(output: RuntimeOutputMessage, context: RuntimeOutputRendererContext): Promise<RuntimeRenderedOutput | undefined>;
+}
 export declare enum LanguageRuntimeClientType {
     Variables = "positron.variables",
     Lsp = "positron.lsp",
@@ -348,6 +455,24 @@ export interface ILanguageRuntimeSession {
     readonly onDidChangeRuntimeState: vscode.Event<RuntimeState>;
     readonly onDidEndSession: vscode.Event<LanguageRuntimeExit>;
     readonly onDidChangeWorkingDirectory: vscode.Event<string>;
+    /**
+     * Every unhandled runtime protocol message, including wrapped IPyWidget
+     * messages. NotebookController owners use this event to project runtime
+     * output into NotebookCellExecution.
+     */
+    readonly onDidReceiveRuntimeMessage: vscode.Event<RuntimeProtocolMessage>;
+    readonly onDidReceiveRuntimeMessageStream: vscode.Event<RuntimeStreamMessage>;
+    readonly onDidReceiveRuntimeMessageInput: vscode.Event<RuntimeInputMessage>;
+    readonly onDidReceiveRuntimeMessageError: vscode.Event<RuntimeErrorMessage>;
+    readonly onDidReceiveRuntimeMessageOutput: vscode.Event<RuntimeOutputMessage>;
+    readonly onDidReceiveRuntimeMessageResult: vscode.Event<RuntimeResultMessage>;
+    readonly onDidReceiveRuntimeMessageState: vscode.Event<RuntimeStateMessage>;
+    readonly onDidReceiveRuntimeMessagePrompt: vscode.Event<RuntimePromptMessage>;
+    readonly onDidReceiveRuntimeMessageClearOutput: vscode.Event<RuntimeClearOutputMessage>;
+    readonly onDidReceiveRuntimeMessageUpdateOutput: vscode.Event<RuntimeUpdateOutputMessage>;
+    readonly onDidReceiveRuntimeMessageIPyWidget: vscode.Event<RuntimeIPyWidgetMessage>;
+    readonly onDidReceiveRuntimeMessageDebugEvent: vscode.Event<RuntimeDebugEventMessage>;
+    readonly onDidReceiveRuntimeMessageDebugReply: vscode.Event<RuntimeDebugReplyMessage>;
     activateLsp(): Promise<void>;
     deactivateLsp(): Promise<void>;
     startDap(targetName: string, debugType: string, debugName: string): Promise<void>;
@@ -361,7 +486,14 @@ export interface ILanguageRuntimeSession {
     watchRuntimeClient(clientType: LanguageRuntimeClientType, handler: (client: ILanguageRuntimeClientInstance) => void): vscode.Disposable;
     waitLsp(): Promise<ILanguageLsp | undefined>;
     getRuntimeState(): RuntimeState;
+    createClient(id: string, type: LanguageRuntimeClientType, params: Record<string, unknown>, metadata?: Record<string, unknown>): Promise<void>;
+    listClients(type?: LanguageRuntimeClientType): Promise<Record<string, string>>;
+    replyToPrompt(id: string, reply: string): Promise<void>;
     interrupt(): Promise<void>;
+    setWorkingDirectory(workingDirectory: string): Promise<void>;
+    restart(workingDirectory?: string): Promise<void>;
+    shutdown(exitReason?: RuntimeExitReason): Promise<void>;
+    forceQuit(): Promise<void>;
 }
 export interface IRuntimeSessionWillStartEvent {
     session: ILanguageRuntimeSession;
@@ -471,7 +603,7 @@ export interface IRuntimeManager {
     readonly id: number;
     readonly onDidDiscoverRuntime?: vscode.Event<IDiscoveredLanguageRuntime>;
     readonly onDidFinishDiscovery?: vscode.Event<void>;
-    discoverAllRuntimes(disabledLanguageIds: string[]): Promise<void>;
+    discoverAllRuntimes(disabledLanguageIds: string[], force?: boolean): Promise<void>;
     recommendWorkspaceRuntimes(disabledLanguageIds: string[]): Promise<LanguageRuntimeMetadata[]>;
     registerDiscoveredRuntime?<TInstallation = unknown>(languageId: string, installation: TInstallation, metadata: LanguageRuntimeMetadata): boolean;
     registerExternalDiscoveryManager?(languageId: string): vscode.Disposable;
@@ -501,6 +633,13 @@ export interface IRuntimeSessionService {
     readonly onDidUpdateSessionName: vscode.Event<ILanguageRuntimeSession>;
     readonly onDidStartUiClient: vscode.Event<IRuntimeUiClientStartedEvent>;
     implicitStartupSuppressed: boolean;
+    /**
+     * Declares the language-extension-owned VS Code NotebookController that
+     * will create/finalize cell executions and forward code to runtime sessions.
+     * Disposing the returned value unregisters ownership; it does not dispose
+     * the controller itself.
+     */
+    registerNotebookController(controller: vscode.NotebookController, languageIds: readonly string[]): vscode.Disposable;
     registerSessionManager(manager: ILanguageRuntimeSessionManager): vscode.Disposable;
     getSession(sessionId: string): ILanguageRuntimeSession | undefined;
     getActiveSession(sessionId: string): ActiveRuntimeSession | undefined;
@@ -514,6 +653,7 @@ export interface IRuntimeSessionService {
     focusSession(sessionId: string): Promise<void>;
     restartSession(sessionId: string, source: string, interrupt?: boolean): Promise<void>;
     interruptSession(sessionId: string): Promise<void>;
+    forceQuitSession(sessionId: string): Promise<void>;
     deleteSession(sessionId: string): Promise<boolean>;
     shutdownNotebookSession(notebookUri: vscode.Uri, exitReason: RuntimeExitReason, source: string): Promise<void>;
     updateNotebookSessionUri(oldUri: vscode.Uri, newUri: vscode.Uri): Promise<string | undefined>;
@@ -636,6 +776,112 @@ export interface IDataExplorerBackendProvider {
     open(uri: vscode.Uri): Promise<IDataExplorerBackendTransport>;
 }
 export type DataConnectionParameterValues = Record<string, boolean | number | string>;
+export declare enum DataConnectionParameterType {
+    Boolean = "boolean",
+    File = "file",
+    Number = "number",
+    Option = "option",
+    Password = "password",
+    String = "string"
+}
+export interface DataConnectionParameterBase {
+    readonly id: string;
+    readonly label: string;
+    readonly description?: string;
+    readonly required?: boolean;
+}
+export type DataConnectionParameter = DataConnectionParameterBase & ({
+    readonly type: DataConnectionParameterType.Boolean;
+    readonly defaultValue?: boolean;
+} | {
+    readonly type: DataConnectionParameterType.File;
+    readonly defaultValue?: string;
+    readonly placeholder?: string;
+    readonly filters?: {
+        readonly [name: string]: readonly string[];
+    };
+} | {
+    readonly type: DataConnectionParameterType.Number;
+    readonly defaultValue?: number;
+    readonly placeholder?: string;
+} | {
+    readonly type: DataConnectionParameterType.Option;
+    readonly options: readonly string[];
+    readonly defaultValue?: string;
+    readonly placeholder?: string;
+} | {
+    readonly type: DataConnectionParameterType.Password;
+    readonly secret: true;
+    readonly placeholder?: string;
+} | {
+    readonly type: DataConnectionParameterType.String;
+    readonly secret?: false;
+    readonly defaultValue?: string;
+    readonly placeholder?: string;
+} | {
+    readonly type: DataConnectionParameterType.String;
+    readonly secret: true;
+    readonly placeholder?: string;
+    readonly masked?: boolean;
+});
+export interface DataConnectionMechanism {
+    readonly id: string;
+    readonly label: string;
+    readonly description: string;
+    readonly parameters: readonly DataConnectionParameter[];
+}
+export interface ConnectionCodeVariant {
+    readonly id: string;
+    readonly label: string;
+    readonly code: string;
+}
+export declare enum DataConnectionNodeKind {
+    Database = "database",
+    Schema = "schema",
+    Table = "table",
+    View = "view",
+    Field = "field",
+    GroupDatabases = "group-databases",
+    GroupSchemas = "group-schemas",
+    GroupTables = "group-tables",
+    GroupViews = "group-views",
+    GroupColumns = "group-columns",
+    GroupIndexes = "group-indexes",
+    Index = "index"
+}
+export interface DataConnectionNode {
+    readonly name: string;
+    readonly kind: DataConnectionNodeKind;
+    readonly dataType?: string;
+    readonly isPrimaryKey?: boolean;
+    getChildren?(): Promise<readonly DataConnectionNode[]>;
+    preview?(): Promise<void>;
+}
+export interface DataConnection {
+    isReadOnly(): Promise<boolean>;
+    getChildren(): Promise<readonly DataConnectionNode[]>;
+    disconnect(): Promise<void>;
+    isConnected(): Promise<boolean>;
+}
+export interface DataConnectionDriver {
+    readonly id: string;
+    readonly name: string;
+    readonly description: string;
+    readonly iconSvg: string;
+    readonly mechanisms: readonly DataConnectionMechanism[];
+    readonly supportedLanguageIds: readonly string[];
+    connect(mechanismId: string, parameters: DataConnectionParameterValues): Promise<DataConnection>;
+    generateConnectionCode?(mechanismId: string, languageId: string, parameters: DataConnectionParameterValues): Promise<readonly ConnectionCodeVariant[]>;
+    redactParameterValue?(mechanismId: string, parameterId: string, value: string): vscode.ProviderResult<string>;
+}
+export interface DataConnectionDriverSummary {
+    readonly id: string;
+    readonly name: string;
+    readonly description: string;
+    readonly mechanisms: readonly DataConnectionMechanism[];
+    readonly supportedLanguageIds: readonly string[];
+}
+/** @deprecated Use DataConnectionNode. */
 export interface IDataConnectionNode {
     readonly handle: number;
     readonly name: string;
@@ -693,6 +939,12 @@ export interface ISupervisorFrameworkApi {
     readonly runtimeStartupService: IRuntimeStartupService;
     readonly positronNewFolderService: IPositronNewFolderService;
     readonly version: string;
+    /**
+     * Registers a language-extension-owned NotebookController with the
+     * supervisor. Notebook sessions are rejected unless their language has a
+     * registered controller owner.
+     */
+    registerNotebookController(controller: vscode.NotebookController, languageIds: readonly string[]): vscode.Disposable;
     startRuntime(metadata: LanguageRuntimeMetadata, source: string, activate: boolean): Promise<string>;
     createSession(runtimeMetadata: LanguageRuntimeMetadata, sessionMetadata: IRuntimeSessionMetadata, kernelSpec: JupyterKernelSpec, dynState: LanguageRuntimeDynState): Promise<ILanguageRuntimeSession>;
     restoreSession(runtimeMetadata: LanguageRuntimeMetadata, sessionMetadata: IRuntimeSessionMetadata, dynState: LanguageRuntimeDynState): Promise<ILanguageRuntimeSession>;
@@ -702,7 +954,10 @@ export interface ISupervisorFrameworkApi {
     registerLspFactory(factory: ILanguageLspFactory): Promise<void>;
     registerDataExplorerBackendProvider(provider: IDataExplorerBackendProvider): vscode.Disposable;
     openDataExplorer(uri: vscode.Uri, providerId?: string): Promise<void>;
-    registerDataConnectionDriver(driver: IDataConnectionDriver): vscode.Disposable;
+    registerRuntimeOutputRenderer(renderer: IRuntimeOutputRenderer): vscode.Disposable;
+    registerDataConnectionDriver(driver: DataConnectionDriver | IDataConnectionDriver): vscode.Disposable;
+    getDataConnectionDrivers(): Promise<readonly DataConnectionDriverSummary[]>;
+    connectDataConnection(driverId: string, mechanismId: string, parameters: DataConnectionParameterValues): Promise<DataConnection>;
     addUpdateDataConnectionProfile(profile: IDataConnectionProfile, connect?: boolean): Promise<void>;
     connectDataConnectionProfile(profileId: string): Promise<void>;
     registerEnvironmentContributions(extensionId: string, actions: readonly ISupervisorEnvironmentVariableAction[]): vscode.Disposable;
