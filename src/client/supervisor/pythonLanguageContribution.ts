@@ -6,6 +6,7 @@ import { PythonEnvironment } from '../pythonEnvironments/info';
 import { PythonConsoleExecutionService } from './pythonConsoleExecutionService';
 import { PythonConsoleRuntimeRouter } from './pythonConsoleRuntimeRouter';
 import { PythonForegroundSessionManager } from './pythonForegroundSessionManager';
+import { PythonSupervisorNotebookController } from './pythonNotebookController';
 import { PythonRuntimeProvider, PythonRuntimeInstallation, PYTHON_LANGUAGE_ID } from './runtimeProvider';
 import { PythonRuntimeSessionManager } from './runtimeSessionManager';
 import { PythonRuntimeStartupManager } from './runtimeStartupManager';
@@ -274,6 +275,7 @@ export class PythonLanguageContribution implements ILanguageExtensionContributio
             this._interpreterService,
             services.logChannel,
         );
+        const notebookController = new PythonSupervisorNotebookController(runtimeRouter, services);
         const controller = new PythonSupervisorController(
             runtimeRouter,
             this.runtimeProvider,
@@ -290,6 +292,7 @@ export class PythonLanguageContribution implements ILanguageExtensionContributio
             services.runtimeSessionService.registerSessionManager(runtimeSessionManager),
             runtimeStartupManager,
             foregroundSessionManager,
+            notebookController,
             controller,
         ];
     }

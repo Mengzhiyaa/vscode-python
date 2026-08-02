@@ -70,6 +70,7 @@ suite('Python Supervisor - Extension Webview Assets', () => {
             },
         } as unknown) as vscode.ExtensionContext;
         const registerLanguageSupport = sinon.stub().resolves();
+        const registerNotebookController = sinon.stub();
         const environmentRegistrationDisposals = [sinon.spy(), sinon.spy()];
         const registerEnvironmentContributions = sinon.stub();
         environmentRegistrationDisposals.forEach((dispose, index) => {
@@ -78,12 +79,16 @@ suite('Python Supervisor - Extension Webview Assets', () => {
 
         const supervisorApi = {
             registerLanguageSupport,
+            registerNotebookController,
             registerEnvironmentContributions,
         };
         const supervisorExtension = {
             activate: sinon.stub(),
         };
-        supervisorExtension.activate.onFirstCall().resolves({ registerLanguageSupport });
+        supervisorExtension.activate.onFirstCall().resolves({
+            registerLanguageSupport,
+            registerEnvironmentContributions,
+        });
         supervisorExtension.activate.onSecondCall().resolves(supervisorApi);
         const serviceContainer = {
             get: sinon.stub().returns({}),
