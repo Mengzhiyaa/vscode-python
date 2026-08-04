@@ -8,6 +8,9 @@ inputs:
   artifact_name:
     description: 'Name of the artifact containing the VSIX'
     required: true
+  supervisor_path:
+    description: 'Path to the vscode-supervisor source directory (relative to repo root)'
+    required: true
 
 runs:
   using: 'composite'
@@ -61,6 +64,7 @@ runs:
       env:
         DISPLAY: 10
         INSTALL_JUPYTER_EXTENSION: true
+        CODE_SUPERVISOR_PATH: ${{ inputs.supervisor_path }}
       uses: GabrielBB/xvfb-action@b706e4e27b14669b486812790492dc50ca16b465 # v1.7
       with:
         run: node --no-force-async-hooks-checks ./out/test/smokeTest.js
