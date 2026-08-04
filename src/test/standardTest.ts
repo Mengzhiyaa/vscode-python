@@ -5,6 +5,7 @@ import * as path from 'path';
 import { downloadAndUnzipVSCode, resolveCliPathFromVSCodeExecutablePath, runTests } from '@vscode/test-electron';
 import { JUPYTER_EXTENSION_ID, PYLANCE_EXTENSION_ID } from '../client/common/constants';
 import { EXTENSION_ROOT_DIR_FOR_TESTS } from './constants';
+import { getSupervisorExtensionDevelopmentPath } from './utils/supervisor';
 import { getChannel } from './utils/vscode';
 import { TestOptions } from '@vscode/test-electron/out/runTest';
 
@@ -25,9 +26,13 @@ process.env.VSC_PYTHON_CI_TEST = '1';
 const workspacePath = process.env.CODE_TESTS_WORKSPACE
     ? process.env.CODE_TESTS_WORKSPACE
     : path.join(__dirname, '..', '..', 'src', 'test');
-const extensionDevelopmentPath = process.env.CODE_EXTENSIONS_PATH
-    ? process.env.CODE_EXTENSIONS_PATH
-    : EXTENSION_ROOT_DIR_FOR_TESTS;
+
+function getExtensionDevelopmentPath(): string[] {
+    const pythonExtensionPath = process.env.CODE_EXTENSIONS_PATH
+        ? process.env.CODE_EXTENSIONS_PATH
+        : EXTENSION_ROOT_DIR_FOR_TESTS;
+    return [pythonExtensionPath, getSupervisorExtensionDevelopmentPath()];
+}
 
 /**
  * Smoke tests & tests running in VSCode require Jupyter extension to be installed.
@@ -74,37 +79,17 @@ async function installPylanceExtension(vscodeExecutablePath: string) {
     }
 }
 
-/**
- * Install the vscode-supervisor extension from a local VSIX if SUPERVISOR_VSIX_PATH is set.
- */
-function installSupervisorExtension(vscodeExecutablePath: string) {
-    const vsixPath = process.env.SUPERVISOR_VSIX_PATH;
-    if (!vsixPath) {
-        console.info('Supervisor Extension VSIX not provided, skipping');
-        return;
-    }
-    const resolvedPath = path.resolve(EXTENSION_ROOT_DIR_FOR_TESTS, vsixPath);
-    console.info(`Installing Supervisor Extension from ${resolvedPath}`);
-    const cliPath = resolveCliPathFromVSCodeExecutablePath(vscodeExecutablePath, os.platform());
-    spawnSync(cliPath, ['--install-extension', resolvedPath, '--force'], {
-        encoding: 'utf-8',
-        stdio: 'inherit',
-    });
-}
-
 async function start() {
     console.log('*'.repeat(100));
     console.log('Start Standard tests');
     const channel = getChannel();
     console.log(`Using ${channel} build of VS Code.`);
     const vscodeExecutablePath = await downloadAndUnzipVSCode(channel);
-    const baseLaunchArgs =
-        requiresJupyterExtensionToBeInstalled() || requiresPylanceExtensionToBeInstalled()
-            ? []
-            : ['--disable-extensions'];
+    // vscode-supervisor is a required co-developed extension, so the test host
+    // must not be started with --disable-extensions.
+    const baseLaunchArgs: string[] = [];
     await installJupyterExtension(vscodeExecutablePath);
     await installPylanceExtension(vscodeExecutablePath);
-    installSupervisorExtension(vscodeExecutablePath);
     console.log('VS Code executable', vscodeExecutablePath);
     const launchArgs = baseLaunchArgs
         .concat([workspacePath])
@@ -112,7 +97,8 @@ async function start() {
         .concat(['--timeout', '5000']);
     console.log(`Starting vscode ${channel} with args ${launchArgs.join(' ')}`);
     const options: TestOptions = {
-        extensionDevelopmentPath: extensionDevelopmentPath,
+        vscodeExecutablePath,
+        extensionDevelopmentPath: getExtensionDevelopmentPath(),
         extensionTestsPath: path.join(EXTENSION_ROOT_DIR_FOR_TESTS, 'out', 'test'),
         launchArgs,
         version: channel,

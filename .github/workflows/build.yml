@@ -21,7 +21,12 @@ env:
   # Also enables a reporter which exits the process running the tests if it haven't already.
   MOCHA_REPORTER_JUNIT: true
   # vscode-supervisor dependency
-  SUPERVISOR_CHECKOUT_PATH: .deps/vscode-supervisor
+  # Checkout paths are relative to GITHUB_WORKSPACE. The Python repository is
+  # checked out under "path with spaces" in the integration-test job, so this
+  # produces the same sibling layout used for local development.
+  SUPERVISOR_CHECKOUT_PATH: vscode-supervisor
+  # Path to the supervisor repository relative to the Python repository.
+  SUPERVISOR_REPO_PATH: ../vscode-supervisor
   SUPERVISOR_REPOSITORY: Mengzhiyaa/vscode-supervisor
 
 jobs:
@@ -73,12 +78,12 @@ jobs:
           #   - os: ubuntu-latest
           #     target: arm-unknown-linux-gnueabihf
           #     vsix-target: linux-armhf
-          #   - os: macos-latest
-          #     target: x86_64-apple-darwin
-          #     vsix-target: darwin-x64
-          #   - os: macos-14
-          #     target: aarch64-apple-darwin
-          #     vsix-target: darwin-arm64
+          - os: macos-15
+            target: x86_64-apple-darwin
+            vsix-target: darwin-x64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            vsix-target: darwin-arm64
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
             vsix-target: alpine-x64
@@ -255,23 +260,19 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: ${{ env.SUPERVISOR_REPOSITORY }}
-          path: ${{ env.special-working-directory-relative }}/${{ env.SUPERVISOR_CHECKOUT_PATH }}
+          path: ${{ env.SUPERVISOR_CHECKOUT_PATH }}
           persist-credentials: false
 
       - name: Verify Supervisor API sync
-        run: npm run verify:supervisor-api -- $SUPERVISOR_CHECKOUT_PATH
+        run: npm run verify:supervisor-api -- "${{ env.SUPERVISOR_REPO_PATH }}"
 
       - name: Install supervisor dependencies
         run: npm ci
-        working-directory: ${{ env.special-working-directory }}/${{ env.SUPERVISOR_CHECKOUT_PATH }}
+        working-directory: ${{ env.SUPERVISOR_CHECKOUT_PATH }}
 
       - name: Build supervisor
         run: npm run build
-        working-directory: ${{ env.special-working-directory }}/${{ env.SUPERVISOR_CHECKOUT_PATH }}
-
-      - name: Package supervisor VSIX
-        run: npx @vscode/vsce package --no-dependencies -o supervisor.vsix
-        working-directory: ${{ env.special-working-directory }}/${{ env.SUPERVISOR_CHECKOUT_PATH }}
+        working-directory: ${{ env.SUPERVISOR_CHECKOUT_PATH }}
 
       - name: Compile
         run: npx gulp prePublishNonBundle
@@ -398,7 +399,7 @@ jobs:
         env:
           TEST_FILES_SUFFIX: testvirtualenvs
           CI_PYTHON_VERSION: ${{ matrix.python }}
-          SUPERVISOR_VSIX_PATH: ${{ env.SUPERVISOR_CHECKOUT_PATH }}/supervisor.vsix
+          CODE_SUPERVISOR_PATH: ${{ env.SUPERVISOR_REPO_PATH }}
         uses: GabrielBB/xvfb-action@b706e4e27b14669b486812790492dc50ca16b465 # v1.7
         with:
           run: npm run testSingleWorkspace
@@ -408,7 +409,7 @@ jobs:
       - name: Run single-workspace tests
         env:
           CI_PYTHON_VERSION: ${{ matrix.python }}
-          SUPERVISOR_VSIX_PATH: ${{ env.SUPERVISOR_CHECKOUT_PATH }}/supervisor.vsix
+          CODE_SUPERVISOR_PATH: ${{ env.SUPERVISOR_REPO_PATH }}
         uses: GabrielBB/xvfb-action@b706e4e27b14669b486812790492dc50ca16b465 # v1.7
         with:
           run: npm run testSingleWorkspace
@@ -418,7 +419,7 @@ jobs:
       - name: Run multi-workspace tests
         env:
           CI_PYTHON_VERSION: ${{ matrix.python }}
-          SUPERVISOR_VSIX_PATH: ${{ env.SUPERVISOR_CHECKOUT_PATH }}/supervisor.vsix
+          CODE_SUPERVISOR_PATH: ${{ env.SUPERVISOR_REPO_PATH }}
         uses: GabrielBB/xvfb-action@b706e4e27b14669b486812790492dc50ca16b465 # v1.7
         with:
           run: npm run testMultiWorkspace
@@ -428,7 +429,7 @@ jobs:
       - name: Run debugger tests
         env:
           CI_PYTHON_VERSION: ${{ matrix.python }}
-          SUPERVISOR_VSIX_PATH: ${{ env.SUPERVISOR_CHECKOUT_PATH }}/supervisor.vsix
+          CODE_SUPERVISOR_PATH: ${{ env.SUPERVISOR_REPO_PATH }}
         uses: GabrielBB/xvfb-action@b706e4e27b14669b486812790492dc50ca16b465 # v1.7
         with:
           run: npm run testDebugger
@@ -474,11 +475,27 @@ jobs:
             Cargo.lock
           sparse-checkout-cone-mode: false
 
+      - name: Checkout vscode-supervisor
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ env.SUPERVISOR_REPOSITORY }}
+          path: ${{ env.SUPERVISOR_CHECKOUT_PATH }}
+          persist-credentials: false
+
+      - name: Install supervisor dependencies
+        run: npm ci
+        working-directory: ${{ env.SUPERVISOR_CHECKOUT_PATH }}
+
+      - name: Build supervisor
+        run: npm run build
+        working-directory: ${{ env.SUPERVISOR_CHECKOUT_PATH }}
+
       - name: Smoke tests
         uses: ./.github/actions/smoke-tests
         with:
           node_version: ${{ env.NODE_VERSION }}
           artifact_name: ${{ needs.setup.outputs.vsix_artifact_name }}-${{ matrix.vsix-target }}
+          supervisor_path: ${{ env.SUPERVISOR_CHECKOUT_PATH }}
 
   publish-ci-prerelease:
     name: Publish CI prerelease
