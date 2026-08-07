@@ -9,6 +9,8 @@ const LAST_FOREGROUND_SESSION_ID_KEY = 'pythonSupervisor.lastForegroundSessionId
 const RUNTIME_STATE_READY = 'ready';
 const RUNTIME_STATE_IDLE = 'idle';
 const RUNTIME_STATE_BUSY = 'busy';
+const RUNTIME_STATE_UNINITIALIZED = 'uninitialized';
+const RUNTIME_STATE_EXITED = 'exited';
 
 function comparePaths(left: string, right: string): boolean {
     const normalizedLeft = process.platform === 'win32' ? path.normalize(left).toLowerCase() : path.normalize(left);
@@ -23,23 +25,24 @@ export class PythonForegroundSessionManager implements vscode.Disposable {
 
     constructor(
         private readonly _context: vscode.ExtensionContext,
-        _runtimeSessionService: IRuntimeSessionService,
+        private readonly _runtimeSessionService: IRuntimeSessionService,
         private readonly _registry: PythonSessionRegistry,
         private readonly _pythonPathUpdaterService: IPythonPathUpdaterServiceManager,
         private readonly _interpreterHelper: IInterpreterHelper,
         private readonly _interpreterService: IInterpreterService,
         private readonly _logChannel: vscode.LogOutputChannel,
     ) {
-        const existingSessions = Array.from(_runtimeSessionService.activeSessions);
+        const existingSessions = Array.from(this._runtimeSessionService.activeSessions);
+        const existingForegroundSession = this._runtimeSessionService.foregroundSession;
         for (const session of existingSessions) {
             this.addSession(session);
         }
 
         this._disposables.push(
-            _runtimeSessionService.onDidCreateSession((session) => {
+            this._runtimeSessionService.onDidCreateSession((session) => {
                 this.addSession(session);
             }),
-            _runtimeSessionService.onDidDeleteRuntimeSession((sessionId) => {
+            this._runtimeSessionService.onDidDeleteRuntimeSession((sessionId) => {
                 if (this.getLastForegroundSessionId() === sessionId) {
                     void this.setLastForegroundSessionId(null);
                 }
@@ -48,12 +51,12 @@ export class PythonForegroundSessionManager implements vscode.Disposable {
                 }
                 this._registry.deleteSession(sessionId);
             }),
-            _runtimeSessionService.onDidChangeForegroundSession((session) => {
+            this._runtimeSessionService.onDidChangeForegroundSession((session) => {
                 void this.enqueueActivation(() => this.didChangeForegroundSession(session));
             }),
         );
 
-        void this.enqueueActivation(() => this.initializeExistingSessions(existingSessions));
+        void this.enqueueActivation(() => this.initializeExistingSessions(existingSessions, existingForegroundSession));
     }
 
     dispose(): void {
@@ -74,7 +77,10 @@ export class PythonForegroundSessionManager implements vscode.Disposable {
         );
     }
 
-    private async initializeExistingSessions(existingSessions: readonly ILanguageRuntimeSession[]): Promise<void> {
+    private async initializeExistingSessions(
+        existingSessions: readonly ILanguageRuntimeSession[],
+        existingForegroundSession: ILanguageRuntimeSession | undefined,
+    ): Promise<void> {
         for (const session of existingSessions) {
             if (session.metadata.sessionMode !== 'notebook') {
                 continue;
@@ -85,18 +91,48 @@ export class PythonForegroundSessionManager implements vscode.Disposable {
             }
         }
 
-        const lastForegroundSessionId = this.getLastForegroundSessionId();
-        if (!lastForegroundSessionId) {
+        if (existingForegroundSession?.runtimeMetadata.languageId === 'python') {
+            const foregroundSession = this._registry.get(existingForegroundSession.sessionId);
+            if (foregroundSession?.metadata.sessionMode !== 'console') {
+                return;
+            }
+
+            await this.restoreForegroundConsoleSession(
+                foregroundSession,
+                'restored foreground console session detected during startup',
+            );
             return;
         }
 
-        const foregroundSession = this._registry.get(lastForegroundSessionId);
-        if (
-            foregroundSession &&
-            foregroundSession.metadata.sessionMode === 'console' &&
-            this.canActivateServices(foregroundSession.state)
-        ) {
-            await this.activateConsoleSession(foregroundSession, 'foreground session restored');
+        // Language contributions can be registered after Supervisor has already
+        // restored sessions and emitted its foreground-session event. In that case
+        // there is no event to replay and persisted workspace state can be stale.
+        // Match vscode-ark by falling back to the newest live console session.
+        const fallbackConsoleSession = existingSessions
+            .filter(
+                (session) =>
+                    session.runtimeMetadata.languageId === 'python' && session.metadata.sessionMode === 'console',
+            )
+            .sort((left, right) => right.created - left.created)
+            .find((session) => session.state !== RUNTIME_STATE_UNINITIALIZED && session.state !== RUNTIME_STATE_EXITED);
+        if (!fallbackConsoleSession) {
+            return;
+        }
+
+        await this.restoreForegroundConsoleSession(
+            fallbackConsoleSession,
+            'restored console session fallback detected during startup',
+        );
+    }
+
+    private async restoreForegroundConsoleSession(session: ILanguageRuntimeSession, reason: string): Promise<void> {
+        if (this.getLastForegroundSessionId() !== session.sessionId) {
+            await this.setLastForegroundSessionId(session.sessionId);
+        }
+
+        await this.syncForegroundPythonPath(session);
+        if (this.canActivateServices(session.state)) {
+            await this.activateConsoleSession(session, reason);
         }
     }
 

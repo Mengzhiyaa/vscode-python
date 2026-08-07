@@ -1,3 +1,4 @@
+import { expect } from 'chai';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 
@@ -8,15 +9,20 @@ import { PythonSessionRegistry } from '../../client/supervisor/pythonSessionRegi
 import { MockOutputChannel } from '../mockClasses';
 
 suite('Python Supervisor - Foreground Session Manager', () => {
-    function createSession(sessionId: string, sessionMode: 'console' | 'notebook') {
+    function createSession(
+        sessionId: string,
+        sessionMode: 'console' | 'notebook',
+        options: { created?: number; languageId?: string; state?: string } = {},
+    ) {
         const stateEmitter = new vscode.EventEmitter<any>();
         return {
             sessionId,
             sessionMode,
-            state: 'ready',
+            state: options.state ?? 'ready',
+            created: options.created ?? Date.now(),
             isForeground: false,
             runtimeMetadata: {
-                languageId: 'python',
+                languageId: options.languageId ?? 'python',
                 runtimePath: `/tmp/${sessionId}/python`,
             },
             metadata: {
@@ -33,8 +39,8 @@ suite('Python Supervisor - Foreground Session Manager', () => {
         };
     }
 
-    function createContext() {
-        const state = new Map<string, string | null>();
+    function createContext(initialState: Record<string, string | null> = {}) {
+        const state = new Map<string, string | null>(Object.entries(initialState));
         return ({
             workspaceState: {
                 get: (key: string) => state.get(key),
@@ -45,12 +51,13 @@ suite('Python Supervisor - Foreground Session Manager', () => {
         } as unknown) as vscode.ExtensionContext;
     }
 
-    function createRuntimeSessionService(activeSessions: any[] = []) {
+    function createRuntimeSessionService(activeSessions: any[] = [], foregroundSession?: any) {
         const didCreateSession = new vscode.EventEmitter<any>();
         const didDeleteRuntimeSession = new vscode.EventEmitter<string>();
         const didChangeForegroundSession = new vscode.EventEmitter<any>();
         return {
             activeSessions,
+            foregroundSession,
             onDidCreateSession: didCreateSession.event,
             onDidDeleteRuntimeSession: didDeleteRuntimeSession.event,
             onDidChangeForegroundSession: didChangeForegroundSession.event,
@@ -170,6 +177,72 @@ suite('Python Supervisor - Foreground Session Manager', () => {
             vscode.ConfigurationTarget.Workspace,
             'load',
             vscode.Uri.file('/workspace'),
+        );
+        manager.dispose();
+    });
+
+    test('reconciles a foreground console restored before the manager starts', async () => {
+        const consoleSession = createSession('restored-console', 'console', { created: 10 });
+        const runtimeSessionService = createRuntimeSessionService([consoleSession], consoleSession);
+        const context = createContext({
+            'pythonSupervisor.lastForegroundSessionId': 'stale-console',
+        });
+        const manager = new PythonForegroundSessionManager(
+            context,
+            runtimeSessionService as any,
+            new PythonSessionRegistry(),
+            ({ updatePythonPath: sinon.stub().resolves() } as unknown) as IPythonPathUpdaterServiceManager,
+            ({
+                getActiveWorkspaceUri: () => ({
+                    folderUri: vscode.Uri.file('/workspace'),
+                    configTarget: vscode.ConfigurationTarget.Workspace,
+                }),
+            } as unknown) as IInterpreterHelper,
+            ({
+                getActiveInterpreter: sinon.stub().resolves(undefined),
+            } as unknown) as IInterpreterService,
+            new MockOutputChannel('python-supervisor'),
+        );
+
+        await flushQueue();
+
+        sinon.assert.calledOnce(consoleSession.activateLsp);
+        expect(context.workspaceState.get('pythonSupervisor.lastForegroundSessionId')).to.equal(
+            consoleSession.sessionId,
+        );
+        manager.dispose();
+    });
+
+    test('falls back to the newest live console when the restored foreground event was missed', async () => {
+        const olderSession = createSession('older-console', 'console', { created: 5 });
+        const newestSession = createSession('newest-console', 'console', { created: 15, state: 'idle' });
+        const exitedSession = createSession('exited-console', 'console', { created: 20, state: 'exited' });
+        const runtimeSessionService = createRuntimeSessionService([olderSession, newestSession, exitedSession]);
+        const context = createContext();
+        const manager = new PythonForegroundSessionManager(
+            context,
+            runtimeSessionService as any,
+            new PythonSessionRegistry(),
+            ({ updatePythonPath: sinon.stub().resolves() } as unknown) as IPythonPathUpdaterServiceManager,
+            ({
+                getActiveWorkspaceUri: () => ({
+                    folderUri: vscode.Uri.file('/workspace'),
+                    configTarget: vscode.ConfigurationTarget.Workspace,
+                }),
+            } as unknown) as IInterpreterHelper,
+            ({
+                getActiveInterpreter: sinon.stub().resolves(undefined),
+            } as unknown) as IInterpreterService,
+            new MockOutputChannel('python-supervisor'),
+        );
+
+        await flushQueue();
+
+        sinon.assert.notCalled(olderSession.activateLsp);
+        sinon.assert.calledOnce(newestSession.activateLsp);
+        sinon.assert.notCalled(exitedSession.activateLsp);
+        expect(context.workspaceState.get('pythonSupervisor.lastForegroundSessionId')).to.equal(
+            newestSession.sessionId,
         );
         manager.dispose();
     });
