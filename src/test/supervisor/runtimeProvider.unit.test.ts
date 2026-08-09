@@ -2,7 +2,11 @@ import { expect } from 'chai';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 
-import { PythonRuntimeProvider } from '../../client/supervisor/runtimeProvider';
+import { EnvironmentType } from '../../client/pythonEnvironments/info';
+import {
+    isPythonRuntimeCacheable,
+    PythonRuntimeProvider,
+} from '../../client/supervisor/runtimeProvider';
 
 suite('Python Supervisor - Runtime Provider', () => {
     teardown(() => {
@@ -29,5 +33,25 @@ suite('Python Supervisor - Runtime Provider', () => {
             errorBehavior: 'stop',
             attribution: { source: 'python.supervisor.setWorkingDirectory' },
         });
+    });
+
+    test('only caches system-scoped Python installations', () => {
+        expect(isPythonRuntimeCacheable({
+            pythonPath: '/usr/bin/python3',
+            envType: EnvironmentType.System,
+        }, ['/workspace'])).to.equal(true);
+        expect(isPythonRuntimeCacheable({
+            pythonPath: '/workspace/.venv/bin/python',
+            envPath: '/workspace/.venv',
+            envType: EnvironmentType.Venv,
+        }, ['/workspace'])).to.equal(false);
+        expect(isPythonRuntimeCacheable({
+            pythonPath: '/home/user/.pyenv/shims/python',
+            envType: EnvironmentType.Pyenv,
+        }, ['/workspace'])).to.equal(false);
+        expect(isPythonRuntimeCacheable({
+            pythonPath: '/workspace/tools/python',
+            envType: EnvironmentType.Unknown,
+        }, ['/workspace'])).to.equal(false);
     });
 });

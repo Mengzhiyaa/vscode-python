@@ -9,7 +9,6 @@ import { PythonForegroundSessionManager } from './pythonForegroundSessionManager
 import { PythonSupervisorNotebookController } from './pythonNotebookController';
 import { PythonRuntimeProvider, PythonRuntimeInstallation, PYTHON_LANGUAGE_ID } from './runtimeProvider';
 import { PythonRuntimeSessionManager } from './runtimeSessionManager';
-import { PythonRuntimeStartupManager } from './runtimeStartupManager';
 import { PythonSessionRegistry } from './pythonSessionRegistry';
 import type {
     ILanguageContributionServices,
@@ -241,13 +240,6 @@ export class PythonLanguageContribution implements ILanguageExtensionContributio
     }
 
     async registerContributions(services: ILanguageContributionServices): Promise<vscode.Disposable[]> {
-        const runtimeStartupManager = new PythonRuntimeStartupManager(
-            this._extensionContext,
-            this.runtimeProvider,
-            services.runtimeManager,
-            services.runtimeStartupService,
-            services.logChannel,
-        );
         const runtimeSessionManager = new PythonRuntimeSessionManager(
             this._extensionContext,
             this._api,
@@ -286,11 +278,7 @@ export class PythonLanguageContribution implements ILanguageExtensionContributio
         await controller.initialize();
 
         return [
-            services.runtimeManager.registerExternalDiscoveryManager?.(this.runtimeProvider.languageId) ??
-                new vscode.Disposable(() => undefined),
-            services.runtimeStartupService.registerRuntimeManager(runtimeStartupManager),
             services.runtimeSessionService.registerSessionManager(runtimeSessionManager),
-            runtimeStartupManager,
             foregroundSessionManager,
             notebookController,
             controller,

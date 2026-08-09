@@ -78,7 +78,19 @@ suite('Python Supervisor - Console Execution Service', () => {
         codeExecutionHelper.verify((helper) => helper.getFileToExecute(), TypeMoq.Times.never());
         sinon.assert.calledOnceWithExactly(runtimeRouter.ensureConsoleSession, 'python.execInConsole', file, true);
 
-        const [languageId, sessionId, code, attribution, focus] = executeCodeStub.firstCall.args;
+        const [
+            languageId,
+            sessionId,
+            code,
+            attribution,
+            focus,
+            allowIncomplete,
+            mode,
+            errorBehavior,
+            executionId,
+            documentUri,
+            executionMetadata,
+        ] = executeCodeStub.firstCall.args;
 
         expect(languageId).to.equal(PYTHON_LANGUAGE_ID);
         expect(sessionId).to.equal('session-1');
@@ -91,6 +103,12 @@ suite('Python Supervisor - Console Execution Service', () => {
             lineNumber: 1,
         });
         expect(focus).to.equal(true);
+        expect(allowIncomplete).to.equal(undefined);
+        expect(mode).to.equal(undefined);
+        expect(errorBehavior).to.equal(undefined);
+        expect(executionId).to.equal(undefined);
+        expect(documentUri).to.equal(file);
+        expect(executionMetadata).to.deep.equal({ executionTarget: 'file' });
     });
 
     test('executes selection commands after ensuring a supervisor console session when no console is live', async () => {

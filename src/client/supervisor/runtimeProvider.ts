@@ -3,7 +3,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { IInterpreterService } from '../interpreter/contracts';
-import { EnvironmentType, PythonEnvironment } from '../pythonEnvironments/info';
+import { isParentPath } from '../pythonEnvironments/common/externalDependencies';
+import { EnvironmentType, PythonEnvironment, virtualEnvTypes } from '../pythonEnvironments/info';
+import { getPythonDiscoveryRootSignature } from './discoveryRootSignature';
 import { createApkKernelSpec, isApkBinaryAvailable } from './kernelSpec';
 import { PythonLanguageLspFactory } from './pythonLsp';
 import type {
@@ -75,7 +77,29 @@ function getInstallationLabel(installation: PythonRuntimeInstallation): string |
     return undefined;
 }
 
+export function isPythonRuntimeCacheable(
+    installation: PythonRuntimeInstallation,
+    workspaceFolderPaths: readonly string[],
+): boolean {
+    if (!installation.pythonPath) {
+        return false;
+    }
+    if (virtualEnvTypes.includes(installation.envType) || installation.envType === EnvironmentType.ActiveState) {
+        return false;
+    }
+    if (installation.pythonPath.includes(`${path.sep}shims${path.sep}`)) {
+        return false;
+    }
+    return !workspaceFolderPaths.some(folder =>
+        folder && (
+            isParentPath(installation.pythonPath, folder) ||
+            !!installation.envPath && isParentPath(installation.envPath, folder)
+        ),
+    );
+}
+
 export class PythonRuntimeProvider implements ILanguageRuntimeProvider<PythonRuntimeInstallation> {
+    readonly extensionId = 'ms-python.python';
     readonly languageId = PYTHON_LANGUAGE_ID;
     readonly languageName = 'Python';
     readonly lspFactory = new PythonLanguageLspFactory();
@@ -207,6 +231,10 @@ export class PythonRuntimeProvider implements ILanguageRuntimeProvider<PythonRun
                 ? RUNTIME_STARTUP_BEHAVIOR.Immediate
                 : RUNTIME_STARTUP_BEHAVIOR.Implicit,
             sessionLocation: RUNTIME_SESSION_LOCATION.Workspace,
+            cacheable: isPythonRuntimeCacheable(
+                installation,
+                (vscode.workspace.workspaceFolders ?? []).map(folder => folder.uri.fsPath),
+            ),
             extraRuntimeData: {
                 installation,
             } as PythonRuntimeExtraData,
@@ -273,6 +301,10 @@ export class PythonRuntimeProvider implements ILanguageRuntimeProvider<PythonRun
         const globs = ['**/*.py', 'pyproject.toml', 'requirements.txt', 'setup.py', 'Pipfile', '.venv', '.conda'];
         const glob = `{${globs.join(',')}}`;
         return (await vscode.workspace.findFiles(glob, '**/node_modules/**', 1)).length > 0;
+    }
+
+    getDiscoveryRootSignature() {
+        return getPythonDiscoveryRootSignature();
     }
 
     getSessionIdPrefix(): string {

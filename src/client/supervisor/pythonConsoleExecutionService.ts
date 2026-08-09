@@ -53,6 +53,12 @@ export class PythonConsoleExecutionService {
                 },
             },
             true,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            fileToExecute,
+            { executionTarget: 'file' },
         );
     }
 
