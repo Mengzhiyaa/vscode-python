@@ -158,7 +158,24 @@ export interface LanguageRuntimeMetadata {
     base64EncodedIconSvg?: string;
     sessionLocation?: LanguageRuntimeSessionLocation;
     startupBehavior?: LanguageRuntimeStartupBehavior;
+    cacheable?: boolean;
     extraRuntimeData?: unknown;
+}
+/**
+ * One root that a runtime provider scans for interpreters. The path should be
+ * resolved before it is returned; `mtimeMs` is zero when the path is absent.
+ */
+export interface RuntimeRootEntry {
+    readonly path: string;
+    readonly exists: boolean;
+    readonly mtimeMs: number;
+}
+/**
+ * Cheap fingerprint of the roots that influence runtime discovery.
+ */
+export interface RuntimeRootSignature {
+    readonly entries: readonly RuntimeRootEntry[];
+    readonly opaque?: string;
 }
 export interface IRuntimeSessionMetadata {
     sessionId: string;
@@ -251,8 +268,11 @@ export interface ILanguageLspFactory {
 }
 export type LanguageSessionMode = 'console' | 'notebook' | 'background';
 export interface ILanguageRuntimeProvider<TInstallation = unknown> {
+    /** Stable owner used to partition discovery cache entries. */
+    readonly extensionId?: string;
     readonly languageId: string;
     readonly languageName: string;
+    readonly alwaysRediscover?: boolean;
     readonly lspFactory?: ILanguageLspFactory;
     discoverInstallations(logChannel: vscode.LogOutputChannel): AsyncGenerator<TInstallation>;
     resolveInitialInstallation(logChannel: vscode.LogOutputChannel): Promise<TInstallation | undefined>;
@@ -272,6 +292,7 @@ export interface ILanguageRuntimeProvider<TInstallation = unknown> {
      */
     setWorkingDirectory?(session: ILanguageRuntimeSession, workingDirectory: string): Promise<void>;
     shouldRecommendForWorkspace?(): Promise<boolean>;
+    getDiscoveryRootSignature?(): Promise<RuntimeRootSignature>;
     getSessionIdPrefix?(sessionMode: LanguageSessionMode): string;
 }
 export type BinaryArchiveType = 'zip' | 'tar.gz';
@@ -407,6 +428,7 @@ export interface RuntimeDebugReplyMessage extends RuntimeProtocolMessage {
 export interface RuntimeOutputRendererContext {
     readonly session: ILanguageRuntimeSession;
     readonly outputKind: string;
+    readonly outputId: string;
 }
 export interface RuntimeRenderedOutput {
     readonly target: 'viewer' | 'plot';
@@ -424,6 +446,8 @@ export interface IRuntimeOutputRenderer {
     readonly mimeTypes?: readonly string[];
     readonly outputKinds?: readonly string[];
     render(output: RuntimeOutputMessage, context: RuntimeOutputRendererContext): Promise<RuntimeRenderedOutput | undefined>;
+    /** Releases renderer state associated with a cleared or disposed output. */
+    disposeOutput?(context: RuntimeOutputRendererContext): void | Promise<void>;
 }
 export declare enum LanguageRuntimeClientType {
     Variables = "positron.variables",
@@ -668,7 +692,7 @@ export interface IPositronConsoleService {
     focusConsole(): Promise<void>;
     showConsole(): Promise<void>;
     getConsoleWidth(): number;
-    executeCode(languageId: string, sessionId: string | undefined, code: string, attribution: ICodeExecutionAttribution, focus: boolean): Promise<string>;
+    executeCode(languageId: string, sessionId: string | undefined, code: string, attribution: ICodeExecutionAttribution, focus: boolean, allowIncomplete?: boolean, mode?: RuntimeCodeExecutionMode, errorBehavior?: RuntimeErrorBehavior, executionId?: string, documentUri?: vscode.Uri, executionMetadata?: Record<string, unknown>): Promise<string>;
 }
 export interface IPositronHelpService {
     showHelpTopic(languageId: string, topic: string): Promise<boolean>;
