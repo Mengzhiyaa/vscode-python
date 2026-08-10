@@ -78,7 +78,7 @@ export async function activateComponents(
     }
     const promises: Promise<ActivationResult>[] = [
         // More component activations will go here
-        pythonEnvironments.activate(components.pythonEnvs, ext),
+        pythonEnvironments.activateAndRefreshEnvs(components.pythonEnvs),
     ];
     return Promise.all([legacyActivationResult, ...promises]);
 }

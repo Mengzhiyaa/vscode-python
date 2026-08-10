@@ -8,17 +8,17 @@
     },
     "positron": {
         "binaryDependencies": {
-            "apk": "0.1.0"
+            "apk": "0.1.1"
         },
         "binaryChecksums": {
             "apk": {
-                "darwin-arm64": "sha256:1f14c7a243571781918adb9fc1ebb849b6e3e123cf042048daa324a07c2ec1ef",
-                "darwin-universal": "sha256:fbd4e08b1a8499eb292bf16adb3c4db30301cda9dc5aecb94dabcad117ca28aa",
-                "darwin-x64": "sha256:53b625f72711984f09b61976ff2a7e78e67841d43f8103a015826447673dcb53",
-                "linux-arm64": "sha256:8652ece57568d9b00b9fd7daa4f0ae471d09e9e64cba72d91c15ec44756f20ad",
-                "linux-x64": "sha256:34046dab64de12b79f45c5b5987bde97139184c7a039ff2d0eff5c2164966154",
-                "windows-arm64": "sha256:224556c85782c402df8e5cee67bb9f4e7559d5790f2204ab8b17eadad9ecdec2",
-                "windows-x64": "sha256:bbd809868c68a537192cc0f58d4f05b77ddb3964a76a8b8ffaefdf9d24210fbe"
+                "darwin-arm64": "sha256:9dda5fef844bd9cd4b03dc606ee0662289d004f809f4f13d0c909b2a2f19649e",
+                "darwin-universal": "sha256:f29618f291e43e453812e436f342153336c6997851e38f4866da0595712359b2",
+                "darwin-x64": "sha256:8ef8dd6cfb65f24ed1f815581ff6f966c95d486e4a3bddcc93b0eed0acabd0b6",
+                "linux-arm64": "sha256:c6a50ce2988f2258d76b315d2f2e131a2f226f2eaf03ada103de899e51af8241",
+                "linux-x64": "sha256:a60906a7eb73c9ea30a008dacf17bef29be941d836ecb78d3c5eff75c9bf7330",
+                "windows-arm64": "sha256:5c663ef3c73809219e237a64aa9ccb0a41351fae26a0cd6ee408984b387db4e5",
+                "windows-x64": "sha256:b3467cefe50a7fc3746a547898c4874462140c9e72aa4a5ca58ef0febf4213c8"
             }
         }
     },
@@ -1881,7 +1881,7 @@
         "node-loader": "^1.0.2",
         "node-polyfill-webpack-plugin": "^1.1.4",
         "nyc": "^18.0.0",
-        "prettier": "^2.0.2",
+        "prettier": "^2.8.8",
         "rewiremock": "^3.13.0",
         "shortid": "^2.2.8",
         "sinon": "^18.0.0",

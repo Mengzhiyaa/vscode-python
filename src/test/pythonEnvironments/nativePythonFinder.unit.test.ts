@@ -4,8 +4,9 @@
 import { assert } from 'chai';
 import * as sinon from 'sinon';
 import * as typemoq from 'typemoq';
-import { WorkspaceConfiguration } from 'vscode';
+import { EventEmitter, WorkspaceConfiguration } from 'vscode';
 import {
+    bufferedEvents,
     getNativePythonFinder,
     isNativeEnvInfo,
     NativeEnvInfo,
@@ -14,6 +15,7 @@ import {
 import * as windowsApis from '../../client/common/vscodeApis/windowApis';
 import { MockOutputChannel } from '../mockClasses';
 import * as workspaceApis from '../../client/common/vscodeApis/workspaceApis';
+import { createDeferred } from '../../client/common/utils/async';
 
 suite('Native Python Finder', () => {
     let finder: NativePythonFinder;
@@ -86,5 +88,48 @@ suite('Native Python Finder', () => {
         } else {
             assert.fail('Expected either executable or prefix to be defined');
         }
+    });
+});
+
+suite('bufferedEvents', () => {
+    test('yields buffered events in order and stops once completion is signalled', async () => {
+        const emitter = new EventEmitter<number>();
+        const completed = createDeferred<void>();
+        // Subscription happens eagerly, so events fired before iteration are buffered.
+        const gen = bufferedEvents<number>(emitter.event, completed.promise);
+        emitter.fire(1);
+        emitter.fire(2);
+        completed.resolve();
+
+        const received: number[] = [];
+        for await (const item of gen) {
+            received.push(item);
+        }
+
+        assert.deepStrictEqual(received, [1, 2]);
+    });
+
+    test('drains events buffered while the consumer is busy, even after completion (#14483)', async () => {
+        const emitter = new EventEmitter<number>();
+        const completed = createDeferred<void>();
+        const gen = bufferedEvents<number>(emitter.event, completed.promise);
+        emitter.fire(1);
+
+        const received: number[] = [];
+        for await (const item of gen) {
+            received.push(item);
+            if (item === 1) {
+                // While the consumer is busy handling item 1, more events arrive and
+                // the producer signals completion. A naive loop that exits the moment
+                // completion flips would drop these; they must still be yielded.
+                emitter.fire(2);
+                emitter.fire(3);
+                completed.resolve();
+                // Simulate slow per-item work so the burst lands during this yield.
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+        }
+
+        assert.deepStrictEqual(received, [1, 2, 3]);
     });
 });

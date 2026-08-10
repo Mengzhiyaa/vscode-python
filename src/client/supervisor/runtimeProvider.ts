@@ -108,14 +108,14 @@ export class PythonRuntimeProvider implements ILanguageRuntimeProvider<PythonRun
 
     constructor(
         private readonly _extensionContext: vscode.ExtensionContext,
-        private readonly _interpreterService: IInterpreterService,
+        private readonly interpreterService: IInterpreterService,
     ) {}
 
     async *discoverInstallations(logChannel: vscode.LogOutputChannel): AsyncGenerator<PythonRuntimeInstallation> {
         if (!isApkBinaryAvailable(this._extensionContext, logChannel)) {
             return;
         }
-        await this.refreshInterpreters(logChannel);
+        await this.triggerInterpreterRefresh(logChannel);
         for (const interpreter of this.listInterpreterEnvironments()) {
             yield this.installationFromEnvironment(interpreter);
         }
@@ -127,9 +127,9 @@ export class PythonRuntimeProvider implements ILanguageRuntimeProvider<PythonRun
         if (!isApkBinaryAvailable(this._extensionContext, logChannel)) {
             return undefined;
         }
-        await this.refreshInterpreters(logChannel);
+        await this.triggerInterpreterRefresh(logChannel);
         const resource = this.getPrimaryWorkspaceUri();
-        const activeInterpreter = await this._interpreterService.getActiveInterpreter(resource);
+        const activeInterpreter = await this.interpreterService.getActiveInterpreter(resource);
         if (activeInterpreter) {
             return this.installationFromEnvironment(activeInterpreter);
         }
@@ -142,8 +142,8 @@ export class PythonRuntimeProvider implements ILanguageRuntimeProvider<PythonRun
         logChannel: vscode.LogOutputChannel,
         resource?: vscode.Uri,
     ): Promise<PythonRuntimeInstallation | undefined> {
-        await this.refreshInterpreters(logChannel, resource);
-        const activeInterpreter = await this._interpreterService.getActiveInterpreter(resource);
+        await this.triggerInterpreterRefresh(logChannel, resource);
+        const activeInterpreter = await this.interpreterService.getActiveInterpreter(resource);
         return activeInterpreter ? this.installationFromEnvironment(activeInterpreter) : undefined;
     }
 
@@ -157,7 +157,7 @@ export class PythonRuntimeProvider implements ILanguageRuntimeProvider<PythonRun
             );
             return undefined;
         }
-        await this.refreshInterpreters(logChannel);
+        await this.triggerInterpreterRefresh(logChannel);
         const preselectedPath = options.preselectRuntimePath;
         const items: InterpreterQuickPickItem[] = this.listInterpreterEnvironments().map((interpreter) => {
             const installation = this.installationFromEnvironment(interpreter);
@@ -328,15 +328,20 @@ export class PythonRuntimeProvider implements ILanguageRuntimeProvider<PythonRun
         return !!this._activeInterpreterPath && comparePaths(installation.pythonPath, this._activeInterpreterPath);
     }
 
-    async refreshInterpreters(logChannel: vscode.LogOutputChannel, resource?: vscode.Uri): Promise<void> {
+    async triggerInterpreterRefresh(logChannel: vscode.LogOutputChannel, resource?: vscode.Uri): Promise<void> {
         try {
-            await this._interpreterService.refresh(resource);
+            // Match positron-python's discovery barrier: triggerRefresh() starts PET
+            // discovery, or joins the refresh already started during activation.
+            await this.interpreterService.triggerRefresh();
         } catch (error) {
             logChannel.warn(`[Python Supervisor] Failed to refresh interpreters: ${error}`);
         }
 
         try {
-            const activeInterpreter = await this._interpreterService.getActiveInterpreter(
+            // Keep display/configuration state synchronized after PET has finished.
+            // InterpreterService.refresh() is not itself a discovery trigger.
+            await this.interpreterService.refresh(resource);
+            const activeInterpreter = await this.interpreterService.getActiveInterpreter(
                 resource ?? this.getPrimaryWorkspaceUri(),
             );
             this._activeInterpreterPath = activeInterpreter?.path;
@@ -359,7 +364,7 @@ export class PythonRuntimeProvider implements ILanguageRuntimeProvider<PythonRun
             return undefined;
         }
 
-        const interpreter = await this._interpreterService.getInterpreterDetails(
+        const interpreter = await this.interpreterService.getInterpreterDetails(
             interpreterUri.fsPath,
             this.getPrimaryWorkspaceUri(),
         );
@@ -397,7 +402,7 @@ export class PythonRuntimeProvider implements ILanguageRuntimeProvider<PythonRun
     }
 
     private listInterpreterEnvironments(): PythonEnvironment[] {
-        const interpreters = this._interpreterService.getInterpreters(this.getPrimaryWorkspaceUri());
+        const interpreters = this.interpreterService.getInterpreters(this.getPrimaryWorkspaceUri());
         const unique = new Map<string, PythonEnvironment>();
         for (const interpreter of interpreters) {
             if (interpreter.path) {

@@ -145,6 +145,25 @@ suite('Python Supervisor - Kernel Spec', () => {
         expect(kernelSpec.argv[0]).to.equal(installedBinary);
     });
 
+    test('provides the PET-discovered Python path to apk', async () => {
+        const extensionPath = fs.mkdtempSync(path.join(os.tmpdir(), 'python-supervisor-ext-'));
+        tempDirs.push(extensionPath);
+        createBundledBinary(extensionPath);
+        delete process.env[APK_BINARY_ENV_VAR];
+        process.env.PATH = '';
+        sinon.stub(workspaceApis, 'getConfiguration').returns({ get: sinon.stub().returns('') } as any);
+
+        const kernelSpec = await createApkKernelSpec(
+            createContext(extensionPath),
+            installation,
+            'console',
+            new MockOutputChannel('python-supervisor'),
+        );
+
+        expect(kernelSpec.argv.slice(1, 3)).to.deep.equal(['--python', installation.pythonPath]);
+        expect(kernelSpec.env?.APK_PYTHON_PATH).to.equal(installation.pythonPath);
+    });
+
     test('uses the adjacent apk repository build during extension development', async () => {
         const workspacePath = fs.mkdtempSync(path.join(os.tmpdir(), 'python-supervisor-workspace-'));
         const extensionPath = path.join(workspacePath, 'vscode-python');
