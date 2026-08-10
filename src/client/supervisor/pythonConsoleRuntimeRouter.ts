@@ -84,11 +84,7 @@ export class PythonConsoleRuntimeRouter {
             installation,
             this._services.logChannel,
         );
-        this._services.runtimeManager.registerDiscoveredRuntime?.(
-            this._runtimeProvider.languageId,
-            installation,
-            metadata,
-        );
+        this._runtimeProvider.reportDiscoveredInstallation(installation);
         return metadata;
     }
 

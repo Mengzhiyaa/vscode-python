@@ -12,6 +12,7 @@ suite('Python Supervisor - Console Runtime Router', () => {
         languageId: string;
         resolveActiveInstallation: sinon.SinonStub;
         createRuntimeMetadata: sinon.SinonStub;
+        reportDiscoveredInstallation: sinon.SinonStub;
         isActiveInstallation: sinon.SinonStub;
         installationFromEnvironment: sinon.SinonStub;
     };
@@ -29,9 +30,6 @@ suite('Python Supervisor - Console Runtime Router', () => {
         runtimeStartupService: {
             getPreferredRuntime: sinon.SinonStub;
         };
-        runtimeManager: {
-            registerDiscoveredRuntime: sinon.SinonStub;
-        };
     };
 
     setup(() => {
@@ -39,6 +37,7 @@ suite('Python Supervisor - Console Runtime Router', () => {
             languageId: PYTHON_LANGUAGE_ID,
             resolveActiveInstallation: sinon.stub(),
             createRuntimeMetadata: sinon.stub(),
+            reportDiscoveredInstallation: sinon.stub(),
             isActiveInstallation: sinon.stub(),
             installationFromEnvironment: sinon.stub(),
         };
@@ -55,9 +54,6 @@ suite('Python Supervisor - Console Runtime Router', () => {
             },
             runtimeStartupService: {
                 getPreferredRuntime: sinon.stub(),
-            },
-            runtimeManager: {
-                registerDiscoveredRuntime: sinon.stub(),
             },
         };
 
@@ -106,12 +102,7 @@ suite('Python Supervisor - Console Runtime Router', () => {
             'python.executeSelectionInSupervisor',
         );
         sinon.assert.notCalled(api.startRuntime);
-        sinon.assert.calledOnceWithExactly(
-            services.runtimeManager.registerDiscoveredRuntime,
-            PYTHON_LANGUAGE_ID,
-            installation,
-            runtimeMetadata,
-        );
+        sinon.assert.calledOnceWithExactly(runtimeProvider.reportDiscoveredInstallation, installation);
     });
 
     test('starts a console session when no live session exists', async () => {
@@ -137,5 +128,19 @@ suite('Python Supervisor - Console Runtime Router', () => {
         expect(result?.sessionId).to.equal('session-1');
         expect(result?.session).to.equal(session);
         sinon.assert.calledOnceWithExactly(api.startRuntime, runtimeMetadata, 'python.execInConsole', true);
+    });
+
+    test('reports dynamic installations through the provider event', () => {
+        const installation = { pythonPath: '/tmp/python-current', envType: 'Unknown' as any };
+        const runtimeMetadata = {
+            runtimeId: 'python-runtime-current',
+            runtimePath: installation.pythonPath,
+            languageId: PYTHON_LANGUAGE_ID,
+        };
+        runtimeProvider.createRuntimeMetadata.returns(runtimeMetadata);
+        const result = router.registerInstallation(installation);
+
+        expect(result).to.equal(runtimeMetadata);
+        sinon.assert.calledOnceWithExactly(runtimeProvider.reportDiscoveredInstallation, installation);
     });
 });

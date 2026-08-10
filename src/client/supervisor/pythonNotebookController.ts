@@ -50,7 +50,7 @@ function outputFromData(data: Record<string, unknown>, outputId?: string): vscod
 
 export class PythonSupervisorNotebookController implements vscode.Disposable {
     private readonly _controller: vscode.NotebookController;
-    private readonly _ownership: vscode.Disposable;
+    private _disposed = false;
 
     constructor(
         private readonly _runtimeRouter: PythonConsoleRuntimeRouter,
@@ -66,13 +66,17 @@ export class PythonSupervisorNotebookController implements vscode.Disposable {
         this._controller.supportsExecutionOrder = true;
         this._controller.executeHandler = (cells, notebook) => this.executeCells(cells, notebook);
         this._controller.interruptHandler = (notebook) => this.interruptNotebook(notebook);
-        this._ownership = this._services.runtimeSessionService.registerNotebookController(this._controller, [
-            PYTHON_LANGUAGE_ID,
-        ]);
+    }
+
+    get controller(): vscode.NotebookController {
+        return this._controller;
     }
 
     dispose(): void {
-        this._ownership.dispose();
+        if (this._disposed) {
+            return;
+        }
+        this._disposed = true;
         this._controller.dispose();
     }
 

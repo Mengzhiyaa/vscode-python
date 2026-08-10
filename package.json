@@ -115,6 +115,26 @@
     ],
     "main": "./out/client/extension",
     "l10n": "./l10n",
+    "supervisor": {
+        "languageAssetsVersion": 1,
+        "languages": [
+            {
+                "languageId": "python",
+                "displayName": "Python",
+                "assets": {
+                    "localResourceRoots": [
+                        "./resources/supervisor",
+                        "./syntaxes"
+                    ],
+                    "monacoSupportModule": "./resources/supervisor/pythonMonacoSupport.js",
+                    "textMateGrammar": {
+                        "scopeName": "source.python",
+                        "path": "./syntaxes/MagicPython.tmLanguage.json"
+                    }
+                }
+            }
+        ]
+    },
     "contributes": {
         "problemMatchers": [
             {

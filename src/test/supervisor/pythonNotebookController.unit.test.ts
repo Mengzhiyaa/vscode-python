@@ -11,7 +11,7 @@ suite('Python Supervisor - Notebook Controller', () => {
         sinon.restore();
     });
 
-    test('registers ownership and executes a cell in its notebook session', async () => {
+    test('executes a cell while registry ownership is managed by the builder', async () => {
         const stateEmitter = new vscode.EventEmitter<any>();
         const streamEmitter = new vscode.EventEmitter<any>();
         const resultEmitter = new vscode.EventEmitter<any>();
@@ -86,14 +86,12 @@ suite('Python Supervisor - Notebook Controller', () => {
             resolveActiveInstallation: sinon.stub(),
             registerInstallation: sinon.stub(),
         };
-        const ownership = { dispose: sinon.spy() };
         const getNotebookSessionForNotebookUri = sinon.stub();
         getNotebookSessionForNotebookUri.onFirstCall().returns(undefined);
         getNotebookSessionForNotebookUri.onSecondCall().returns(session);
         const services = {
             logChannel: new MockOutputChannel('python-supervisor'),
             runtimeSessionService: {
-                registerNotebookController: sinon.stub().returns(ownership),
                 getNotebookSessionForNotebookUri,
                 selectRuntime: sinon.stub().resolves(),
                 selectInstallation: sinon.stub(),
@@ -103,11 +101,6 @@ suite('Python Supervisor - Notebook Controller', () => {
         const controller = new PythonSupervisorNotebookController(runtimeRouter as any, services as any);
         await notebookController.executeHandler([cell], notebook, notebookController as any);
 
-        sinon.assert.calledOnceWithExactly(
-            services.runtimeSessionService.registerNotebookController,
-            notebookController,
-            ['python'],
-        );
         sinon.assert.calledOnceWithExactly(
             services.runtimeSessionService.selectRuntime,
             'python-runtime-1',
@@ -134,7 +127,6 @@ suite('Python Supervisor - Notebook Controller', () => {
         sinon.assert.calledOnceWithExactly(execution.end, true, sinon.match.number);
 
         controller.dispose();
-        sinon.assert.calledOnce(ownership.dispose);
         sinon.assert.calledOnce(notebookController.dispose);
     });
 });

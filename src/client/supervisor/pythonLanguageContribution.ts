@@ -12,7 +12,7 @@ import { PythonRuntimeSessionManager } from './runtimeSessionManager';
 import { PythonSessionRegistry } from './pythonSessionRegistry';
 import type {
     ILanguageContributionServices,
-    ILanguageExtensionContribution,
+    ILanguageOptionalCapabilityDescriptor,
     ISupervisorFrameworkApi,
 } from './types/supervisor-api';
 import { IInterpreterHelper } from '../interpreter/contracts';
@@ -227,8 +227,11 @@ class PythonSupervisorController implements vscode.Disposable {
     }
 }
 
-export class PythonLanguageContribution implements ILanguageExtensionContribution {
+export class PythonLanguageContribution {
     readonly runtimeProvider: PythonRuntimeProvider;
+    private _runtimeSessionManager: PythonRuntimeSessionManager | undefined;
+    private _runtimeRouter: PythonConsoleRuntimeRouter | undefined;
+    private _notebookController: PythonSupervisorNotebookController | undefined;
 
     constructor(
         private readonly _extensionContext: vscode.ExtensionContext,
@@ -239,26 +242,48 @@ export class PythonLanguageContribution implements ILanguageExtensionContributio
         this.runtimeProvider = new PythonRuntimeProvider(_extensionContext, _interpreterService);
     }
 
-    async registerContributions(services: ILanguageContributionServices): Promise<vscode.Disposable[]> {
-        const runtimeSessionManager = new PythonRuntimeSessionManager(
+    getRuntimeSessionManager(logChannel: vscode.LogOutputChannel): PythonRuntimeSessionManager {
+        this._runtimeSessionManager ??= new PythonRuntimeSessionManager(
             this._extensionContext,
             this._api,
             this.runtimeProvider,
-            services.logChannel,
+            logChannel,
         );
-        const runtimeRouter = new PythonConsoleRuntimeRouter(
-            this._extensionContext,
-            this._api,
-            this.runtimeProvider,
+        return this._runtimeSessionManager;
+    }
+
+    getNotebookController(
+        services: ILanguageContributionServices,
+    ): PythonSupervisorNotebookController {
+        this._notebookController ??= new PythonSupervisorNotebookController(
+            this.getRuntimeRouter(services),
             services,
         );
-        const consoleExecutionService = new PythonConsoleExecutionService(
-            runtimeRouter,
-            this._serviceContainer,
-            services.positronConsoleService,
-        );
+        return this._notebookController;
+    }
+
+    getOptionalCapabilities(): readonly ILanguageOptionalCapabilityDescriptor[] {
+        const services = (value: unknown) => value as ILanguageContributionServices;
+        return [
+            {
+                id: 'python.foregroundSessionManager',
+                revision: 1,
+                kind: 'commands',
+                activate: ({ services: value }) => this.createForegroundSessionManager(services(value)),
+            },
+            {
+                id: 'python.consoleController',
+                revision: 1,
+                kind: 'commands',
+                dependencies: ['python.foregroundSessionManager'],
+                activate: ({ services: value }) => this.createConsoleController(services(value)),
+            },
+        ];
+    }
+
+    private createForegroundSessionManager(services: ILanguageContributionServices): PythonForegroundSessionManager {
         const sessionRegistry = new PythonSessionRegistry();
-        const foregroundSessionManager = new PythonForegroundSessionManager(
+        return new PythonForegroundSessionManager(
             this._extensionContext,
             services.runtimeSessionService,
             sessionRegistry,
@@ -267,7 +292,15 @@ export class PythonLanguageContribution implements ILanguageExtensionContributio
             this._interpreterService,
             services.logChannel,
         );
-        const notebookController = new PythonSupervisorNotebookController(runtimeRouter, services);
+    }
+
+    private async createConsoleController(services: ILanguageContributionServices): Promise<vscode.Disposable> {
+        const runtimeRouter = this.getRuntimeRouter(services);
+        const consoleExecutionService = new PythonConsoleExecutionService(
+            runtimeRouter,
+            this._serviceContainer,
+            services.positronConsoleService,
+        );
         const controller = new PythonSupervisorController(
             runtimeRouter,
             this.runtimeProvider,
@@ -275,13 +308,22 @@ export class PythonLanguageContribution implements ILanguageExtensionContributio
             services,
             consoleExecutionService,
         );
-        await controller.initialize();
+        try {
+            await controller.initialize();
+            return controller;
+        } catch (error) {
+            controller.dispose();
+            throw error;
+        }
+    }
 
-        return [
-            services.runtimeSessionService.registerSessionManager(runtimeSessionManager),
-            foregroundSessionManager,
-            notebookController,
-            controller,
-        ];
+    private getRuntimeRouter(services: ILanguageContributionServices): PythonConsoleRuntimeRouter {
+        this._runtimeRouter ??= new PythonConsoleRuntimeRouter(
+            this._extensionContext,
+            this._api,
+            this.runtimeProvider,
+            services,
+        );
+        return this._runtimeRouter;
     }
 }

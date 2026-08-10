@@ -105,11 +105,17 @@ export class PythonRuntimeProvider implements ILanguageRuntimeProvider<PythonRun
     readonly lspFactory = new PythonLanguageLspFactory();
 
     private _activeInterpreterPath: string | undefined;
+    private readonly _onDidDiscoverInstallation = new vscode.EventEmitter<PythonRuntimeInstallation>();
+    readonly onDidDiscoverInstallation = this._onDidDiscoverInstallation.event;
 
     constructor(
         private readonly _extensionContext: vscode.ExtensionContext,
         private readonly interpreterService: IInterpreterService,
     ) {}
+
+    reportDiscoveredInstallation(installation: PythonRuntimeInstallation): void {
+        this._onDidDiscoverInstallation.fire(installation);
+    }
 
     async *discoverInstallations(logChannel: vscode.LogOutputChannel): AsyncGenerator<PythonRuntimeInstallation> {
         if (!isApkBinaryAvailable(this._extensionContext, logChannel)) {
