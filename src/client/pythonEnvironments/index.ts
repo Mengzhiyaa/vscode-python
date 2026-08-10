@@ -99,6 +99,24 @@ export async function initialize(ext: ExtensionState): Promise<IDiscoveryAPI> {
 /**
  * Make use of the component (e.g. register with VS Code).
  */
+export async function activateAndRefreshEnvs(api: IDiscoveryAPI): Promise<ActivationResult> {
+    /**
+     * Force a background refresh of the environments for each extension activation
+     *
+     * Based off activate(), but not including the logic around triggering only if
+     * it has not previously been triggered
+     */
+
+    api.triggerRefresh().ignoreErrors();
+
+    return {
+        fullyReady: Promise.resolve(),
+    };
+}
+
+/**
+ * Make use of the component (e.g. register with VS Code).
+ */
 export async function activate(api: IDiscoveryAPI, ext: ExtensionState): Promise<ActivationResult> {
     /**
      * Force an initial background refresh of the environments.

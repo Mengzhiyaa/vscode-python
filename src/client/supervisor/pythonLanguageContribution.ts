@@ -81,7 +81,7 @@ class PythonSupervisorController implements vscode.Disposable {
     }
 
     async initialize(): Promise<void> {
-        await this._runtimeProvider.refreshInterpreters(this._services.logChannel);
+        await this._runtimeProvider.triggerInterpreterRefresh(this._services.logChannel);
         await this._runtimeRouter.syncActiveInterpreter('Python supervisor activation');
     }
 

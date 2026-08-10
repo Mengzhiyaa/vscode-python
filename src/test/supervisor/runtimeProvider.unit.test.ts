@@ -7,6 +7,7 @@ import {
     isPythonRuntimeCacheable,
     PythonRuntimeProvider,
 } from '../../client/supervisor/runtimeProvider';
+import { MockOutputChannel } from '../mockClasses';
 
 suite('Python Supervisor - Runtime Provider', () => {
     teardown(() => {
@@ -33,6 +34,30 @@ suite('Python Supervisor - Runtime Provider', () => {
             errorBehavior: 'stop',
             attribution: { source: 'python.supervisor.setWorkingDirectory' },
         });
+    });
+
+    test('waits for PET discovery before refreshing and resolving the active interpreter', async () => {
+        const calls: string[] = [];
+        const interpreterService = {
+            triggerRefresh: sinon.stub().callsFake(async () => {
+                calls.push('triggerRefresh');
+            }),
+            refresh: sinon.stub().callsFake(async () => {
+                calls.push('refresh');
+            }),
+            getActiveInterpreter: sinon.stub().callsFake(async () => {
+                calls.push('getActiveInterpreter');
+                return { path: '/pet/python' };
+            }),
+        };
+        const provider = new PythonRuntimeProvider(
+            {} as vscode.ExtensionContext,
+            (interpreterService as unknown) as any,
+        );
+
+        await provider.triggerInterpreterRefresh(new MockOutputChannel('python-supervisor'));
+
+        expect(calls).to.deep.equal(['triggerRefresh', 'refresh', 'getActiveInterpreter']);
     });
 
     test('only caches system-scoped Python installations', () => {
