@@ -27,12 +27,12 @@ function isIdle(session: ILanguageRuntimeSession): boolean {
 
 async function waitForPythonConsole(api: ISupervisorFrameworkApi): Promise<ILanguageRuntimeSession> {
     await waitForCondition(
-        async () => !!api.runtimeSessionService.getConsoleSessionForLanguage(PYTHON_LANGUAGE_ID),
+        async () => !!api.services.runtimeSessionService.getConsoleSessionForLanguage(PYTHON_LANGUAGE_ID),
         TEST_TIMEOUT,
         'Python Supervisor console session was not created',
     );
 
-    const session = api.runtimeSessionService.getConsoleSessionForLanguage(PYTHON_LANGUAGE_ID);
+    const session = api.services.runtimeSessionService.getConsoleSessionForLanguage(PYTHON_LANGUAGE_ID);
     assert.ok(session, 'Expected a Python Supervisor console session');
     await waitForCondition(
         async () => isIdle(session),
@@ -81,13 +81,13 @@ suite('Smoke Test: Python Supervisor integration', () => {
     });
 
     suiteTeardown(async () => {
-        const session = supervisorApi?.runtimeSessionService.getConsoleSessionForLanguage(PYTHON_LANGUAGE_ID);
+        const session = supervisorApi?.services.runtimeSessionService.getConsoleSessionForLanguage(PYTHON_LANGUAGE_ID);
         if (session) {
             try {
                 if (session.state === 'busy' || session.state === 'interrupting') {
-                    await supervisorApi.runtimeSessionService.forceQuitSession(session.sessionId);
+                    await supervisorApi.services.runtimeSessionService.forceQuitSession(session.sessionId);
                 }
-                await supervisorApi.runtimeSessionService.deleteSession(session.sessionId);
+                await supervisorApi.services.runtimeSessionService.deleteSession(session.sessionId);
             } catch (error) {
                 console.warn(`Failed to clean up Python Supervisor smoke session: ${error}`);
             }
@@ -97,10 +97,12 @@ suite('Smoke Test: Python Supervisor integration', () => {
 
     test('registers Python support and discovers an interpreter runtime', async () => {
         assert.strictEqual(typeof supervisorApi.version, 'string');
-        assert.strictEqual(typeof supervisorApi.registerLanguageSupport, 'function');
+        assert.strictEqual(supervisorApi.apiVersion, 2);
+        assert.strictEqual(supervisorApi.protocolVersion.major, 2);
+        assert.strictEqual(typeof supervisorApi.languages.forExtension, 'function');
 
         await waitForCondition(
-            async () => supervisorApi.runtimeStartupService.discoveredRuntimeCount > 0,
+            async () => supervisorApi.services.runtimeStartupService.discoveredRuntimeCount > 0,
             TEST_TIMEOUT,
             'Supervisor did not discover the Python runtime contributed by vscode-python',
         );
@@ -141,7 +143,7 @@ suite('Smoke Test: Python Supervisor integration', () => {
                 `Python Supervisor console did not become busy (states: ${states.join(', ')})`,
             );
 
-            await supervisorApi.runtimeSessionService.interruptSession(session.sessionId);
+            await supervisorApi.services.runtimeSessionService.interruptSession(session.sessionId);
             await waitForCondition(
                 async () => isIdle(session),
                 TEST_TIMEOUT,
@@ -154,7 +156,7 @@ suite('Smoke Test: Python Supervisor integration', () => {
             );
 
             states.length = 0;
-            await supervisorApi.runtimeSessionService.restartSession(
+            await supervisorApi.services.runtimeSessionService.restartSession(
                 session.sessionId,
                 'python.supervisor.smokeTest.restart',
             );
@@ -169,14 +171,14 @@ suite('Smoke Test: Python Supervisor integration', () => {
             const output = await executeAndCollectOutput(session, `print(${JSON.stringify(marker)})`);
             assert.ok(output.includes(marker), `Expected output after restart to include ${marker}; received: ${output}`);
 
-            const deleted = await supervisorApi.runtimeSessionService.deleteSession(session.sessionId);
+            const deleted = await supervisorApi.services.runtimeSessionService.deleteSession(session.sessionId);
             assert.strictEqual(deleted, true);
-            assert.strictEqual(supervisorApi.runtimeSessionService.getSession(session.sessionId), undefined);
+            assert.strictEqual(supervisorApi.services.runtimeSessionService.getSession(session.sessionId), undefined);
         } finally {
             disposables.forEach((disposable) => disposable.dispose());
             if (session.state === 'busy' || session.state === 'interrupting') {
                 try {
-                    await supervisorApi.runtimeSessionService.interruptSession(session.sessionId);
+                    await supervisorApi.services.runtimeSessionService.interruptSession(session.sessionId);
                 } catch (error) {
                     console.warn(`Failed to interrupt Python Supervisor smoke session during cleanup: ${error}`);
                 }

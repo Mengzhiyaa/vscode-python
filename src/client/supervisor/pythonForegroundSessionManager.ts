@@ -3,7 +3,11 @@ import * as vscode from 'vscode';
 import { IInterpreterHelper, IInterpreterService } from '../interpreter/contracts';
 import { IPythonPathUpdaterServiceManager } from '../interpreter/configuration/types';
 import { PythonSessionRegistry } from './pythonSessionRegistry';
-import type { ILanguageRuntimeSession, IRuntimeSessionService, RuntimeState } from './types/supervisor-api';
+import type {
+    ILanguageContributionServices,
+    ILanguageRuntimeSession,
+    RuntimeState,
+} from './types/supervisor-api';
 
 const LAST_FOREGROUND_SESSION_ID_KEY = 'pythonSupervisor.lastForegroundSessionId';
 const RUNTIME_STATE_READY = 'ready';
@@ -25,7 +29,7 @@ export class PythonForegroundSessionManager implements vscode.Disposable {
 
     constructor(
         private readonly _context: vscode.ExtensionContext,
-        private readonly _runtimeSessionService: IRuntimeSessionService,
+        private readonly _runtimeSessionService: ILanguageContributionServices['runtimeSessionService'],
         private readonly _registry: PythonSessionRegistry,
         private readonly _pythonPathUpdaterService: IPythonPathUpdaterServiceManager,
         private readonly _interpreterHelper: IInterpreterHelper,
