@@ -50,6 +50,24 @@ const RUNTIME_STARTUP_BEHAVIOR = {
     Implicit: 'implicit' as NonNullable<LanguageRuntimeMetadata['startupBehavior']>,
 } as const;
 
+const PYTHON_ICON_PATH = ['resources', 'branding', 'python-icon.svg'] as const;
+
+function getPythonIconUri(context: vscode.ExtensionContext): vscode.Uri {
+    return vscode.Uri.joinPath(context.extensionUri, ...PYTHON_ICON_PATH);
+}
+
+function loadPythonIconBase64(
+    context: vscode.ExtensionContext,
+    logChannel?: vscode.LogOutputChannel,
+): string | undefined {
+    try {
+        return fs.readFileSync(getPythonIconUri(context).fsPath).toString('base64');
+    } catch (error) {
+        logChannel?.debug(`[Python Supervisor] Unable to load Python runtime icon: ${error}`);
+        return undefined;
+    }
+}
+
 function comparePaths(left: string, right: string): boolean {
     const normalizedLeft = process.platform === 'win32' ? path.normalize(left).toLowerCase() : path.normalize(left);
     const normalizedRight = process.platform === 'win32' ? path.normalize(right).toLowerCase() : path.normalize(right);
@@ -172,6 +190,7 @@ export class PythonRuntimeProvider implements ILanguageRuntimeProvider<PythonRun
             const label = installation.displayName ?? installation.envName ?? path.basename(installation.pythonPath);
             return {
                 label,
+                iconPath: this.getRuntimeIconPath(installation),
                 description: `${version} • ${sourceLabel}`,
                 detail: installation.pythonPath,
                 picked: preselectedPath ? comparePaths(installation.pythonPath, preselectedPath) : false,
@@ -209,6 +228,10 @@ export class PythonRuntimeProvider implements ILanguageRuntimeProvider<PythonRun
         return `Python ${this.getRuntimeShortName(installation)}`;
     }
 
+    getRuntimeIconPath(_installation: PythonRuntimeInstallation): vscode.IconPath {
+        return getPythonIconUri(this._extensionContext);
+    }
+
     getRuntimePath(installation: PythonRuntimeInstallation): string {
         return installation.pythonPath;
     }
@@ -220,7 +243,7 @@ export class PythonRuntimeProvider implements ILanguageRuntimeProvider<PythonRun
     createRuntimeMetadata(
         _context: vscode.ExtensionContext,
         installation: PythonRuntimeInstallation,
-        _logChannel: vscode.LogOutputChannel,
+        logChannel: vscode.LogOutputChannel,
     ): LanguageRuntimeMetadata {
         const runtimeShortName = this.getRuntimeShortName(installation);
         return {
@@ -233,6 +256,7 @@ export class PythonRuntimeProvider implements ILanguageRuntimeProvider<PythonRun
             languageId: this.languageId,
             languageName: this.languageName,
             languageVersion: installation.version ?? '0.0.0',
+            base64EncodedIconSvg: loadPythonIconBase64(this._extensionContext, logChannel),
             startupBehavior: this.isActiveInstallation(installation)
                 ? RUNTIME_STARTUP_BEHAVIOR.Immediate
                 : RUNTIME_STARTUP_BEHAVIOR.Implicit,
