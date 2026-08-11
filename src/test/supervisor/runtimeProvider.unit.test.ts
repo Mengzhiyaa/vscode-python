@@ -1,5 +1,6 @@
 import { expect } from 'chai';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
@@ -70,6 +71,26 @@ suite('Python Supervisor - Runtime Provider', () => {
             new MockOutputChannel('python-supervisor'),
         );
         expect(metadata.base64EncodedIconSvg).to.equal(fs.readFileSync(expectedIconPath).toString('base64'));
+        expect(metadata.runtimeDisplayPath).to.equal(installation.pythonPath);
+    });
+
+    test('provides a home-relative runtime display path', () => {
+        when(mockedVSCodeNamespaces.workspace!.workspaceFolders).thenReturn([]);
+        const context = createExtensionContext();
+        const provider = new PythonRuntimeProvider(context, {} as any);
+        const pythonPath = path.join(os.homedir(), 'envs', 'python-3.13', 'bin', 'python');
+
+        const metadata = provider.createRuntimeMetadata(
+            context,
+            {
+                pythonPath,
+                envType: EnvironmentType.Venv,
+                version: '3.13.0',
+            },
+            new MockOutputChannel('python-supervisor'),
+        );
+
+        expect(metadata.runtimeDisplayPath).to.equal(path.join('~', 'envs', 'python-3.13', 'bin', 'python'));
     });
 
     test('waits for PET discovery before refreshing and resolving the active interpreter', async () => {
