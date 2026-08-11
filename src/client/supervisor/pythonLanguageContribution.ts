@@ -17,6 +17,7 @@ import type {
 } from './types/supervisor-api';
 import { IInterpreterHelper } from '../interpreter/contracts';
 import { IPythonPathUpdaterServiceManager } from '../interpreter/configuration/types';
+import { PythonPackageManagerProvider } from './packages/packageManagerProvider';
 
 export const PYTHON_START_SUPERVISOR_CONSOLE_COMMAND = 'python.startSupervisorConsole';
 export const PYTHON_SELECT_SUPERVISOR_RUNTIME_COMMAND = 'python.selectSupervisorRuntime';
@@ -278,7 +279,19 @@ export class PythonLanguageContribution {
                 dependencies: ['python.foregroundSessionManager'],
                 activate: ({ services: value }) => this.createConsoleController(services(value)),
             },
+            {
+                id: 'python.packages',
+                revision: 1,
+                kind: 'packageManager',
+                activate: ({ services: value }) => this.registerPackageManager(services(value)),
+            },
         ];
+    }
+
+    private registerPackageManager(services: ILanguageContributionServices): vscode.Disposable {
+        return services.positronPackagesService.registerPackageManagerProvider(
+            new PythonPackageManagerProvider(this.runtimeProvider, this._serviceContainer, services.logChannel),
+        );
     }
 
     private createForegroundSessionManager(services: ILanguageContributionServices): PythonForegroundSessionManager {

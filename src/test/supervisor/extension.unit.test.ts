@@ -257,7 +257,23 @@ suite('Python Supervisor - Extension Registration', () => {
         expect(addOptionalCapability.getCalls().map((call) => call.args[0].id)).to.deep.equal([
             'python.foregroundSessionManager',
             'python.consoleController',
+            'python.packages',
         ]);
+        const packageCapability = addOptionalCapability.getCalls().find((call) => call.args[0].id === 'python.packages')
+            ?.args[0];
+        expect(packageCapability.kind).to.equal('packageManager');
+        const disposePackageProvider = sinon.spy();
+        const registerPackageManagerProvider = sinon.stub().returns(new vscode.Disposable(disposePackageProvider));
+        const packageRegistration = await packageCapability.activate({
+            services: {
+                logChannel: {},
+                positronPackagesService: { registerPackageManagerProvider },
+            },
+        });
+        sinon.assert.calledOnce(registerPackageManagerProvider);
+        expect(registerPackageManagerProvider.firstCall.args[0].languageId).to.equal('python');
+        packageRegistration.dispose();
+        sinon.assert.calledOnce(disposePackageProvider);
         expect(context.subscriptions).to.include(handle);
         expect(context.subscriptions).to.have.length.greaterThan(2);
 
