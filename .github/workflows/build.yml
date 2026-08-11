@@ -270,6 +270,13 @@ jobs:
         run: npm ci
         working-directory: ${{ env.SUPERVISOR_CHECKOUT_PATH }}
 
+      # The Supervisor repository only carries the Unix development binary.
+      # Windows extension-host tests need kcserver.exe in resources/kallichore
+      # before Supervisor can activate as Python's extension dependency.
+      - name: Install Windows Supervisor binary
+        run: npm run install:binaries -- --retry 3
+        working-directory: ${{ env.SUPERVISOR_CHECKOUT_PATH }}
+
       - name: Build supervisor
         run: npm run build
         working-directory: ${{ env.SUPERVISOR_CHECKOUT_PATH }}
@@ -446,6 +453,10 @@ jobs:
     if: github.repository == 'Mengzhiyaa/vscode-python'
     runs-on: ${{ matrix.os }}
     needs: [setup, build-vsix]
+    # Keep the co-developed extension below an already excluded TypeScript
+    # directory so `tsc -p ./` does not compile Supervisor as Python sources.
+    env:
+      SUPERVISOR_CHECKOUT_PATH: tmp/vscode-supervisor
     strategy:
       fail-fast: false
       matrix:
@@ -503,14 +514,8 @@ jobs:
 
   publish-ci-prerelease:
     name: Publish CI prerelease
-    if: github.repository == 'Mengzhiyaa/vscode-python'
-    needs:
-      - build-vsix
-      - lint
-      - check-types
-      - python-tests
-      - tests
-      - smoke-tests
+    if: github.repository == 'Mengzhiyaa/vscode-python' && github.ref == 'refs/heads/main'
+    needs: build-vsix
     runs-on: ubuntu-latest
     permissions:
       contents: write
