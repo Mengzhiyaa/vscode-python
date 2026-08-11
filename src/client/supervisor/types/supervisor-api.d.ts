@@ -52,7 +52,13 @@ export interface ConsoleSettings {
     fontFamily: string;
     fontSize: number;
     lineHeight: number;
+    fontLigatures: string;
+    fontVariations: string;
+    fontWeight: string;
+    letterSpacing: number;
     showResourceMonitor: boolean;
+    promptWhenIncomplete: boolean;
+    sashSize: number;
 }
 export declare enum RuntimeCodeExecutionMode {
     Interactive = "interactive",
@@ -149,6 +155,8 @@ export interface LanguageRuntimeMetadata {
     runtimeId: string;
     runtimeName: string;
     runtimePath: string;
+    /** Human-friendly runtime path, for example one using `~` shorthand. */
+    runtimeDisplayPath?: string;
     runtimeVersion: string;
     runtimeShortName: string;
     runtimeSource: string;

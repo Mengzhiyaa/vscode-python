@@ -2,6 +2,7 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { FileSystemPathUtils } from '../common/platform/fs-paths';
 import { IInterpreterService } from '../interpreter/contracts';
 import { isParentPath } from '../pythonEnvironments/common/externalDependencies';
 import { EnvironmentType, PythonEnvironment, virtualEnvTypes } from '../pythonEnvironments/info';
@@ -51,6 +52,7 @@ const RUNTIME_STARTUP_BEHAVIOR = {
 } as const;
 
 const PYTHON_ICON_PATH = ['resources', 'branding', 'python-icon.svg'] as const;
+const fileSystemPathUtils = FileSystemPathUtils.withDefaults();
 
 function getPythonIconUri(context: vscode.ExtensionContext): vscode.Uri {
     return vscode.Uri.joinPath(context.extensionUri, ...PYTHON_ICON_PATH);
@@ -251,6 +253,7 @@ export class PythonRuntimeProvider implements ILanguageRuntimeProvider<PythonRun
             runtimeName: `Python ${runtimeShortName}`,
             runtimeShortName,
             runtimePath: installation.pythonPath,
+            runtimeDisplayPath: fileSystemPathUtils.getDisplayName(installation.pythonPath),
             runtimeVersion: this.getExtensionVersion(),
             runtimeSource: this.getRuntimeSource(installation),
             languageId: this.languageId,
