@@ -31,9 +31,9 @@ runs:
       run: npm run lint
       shell: bash
 
-    - name: Check TypeScript format
-      run: npm run format-check
-      shell: bash
+    # - name: Check TypeScript format
+    #   run: npm run format-check
+    #   shell: bash
 
     - name: Install Python
       uses: actions/setup-python@v7

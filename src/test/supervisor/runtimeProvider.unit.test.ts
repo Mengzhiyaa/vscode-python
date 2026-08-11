@@ -62,7 +62,7 @@ suite('Python Supervisor - Runtime Provider', () => {
         const expectedIconPath = path.join(EXTENSION_ROOT_DIR_FOR_TESTS, 'resources', 'branding', 'python-icon.svg');
 
         const iconPath = provider.getRuntimeIconPath(installation) as vscode.Uri;
-        expect(iconPath.fsPath).to.equal(expectedIconPath);
+        expect(iconPath.toString()).to.equal(vscode.Uri.file(expectedIconPath).toString());
 
         const metadata = provider.createRuntimeMetadata(
             context,

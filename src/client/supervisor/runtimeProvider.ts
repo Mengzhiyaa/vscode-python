@@ -105,7 +105,7 @@ export function isPythonRuntimeCacheable(
     if (virtualEnvTypes.includes(installation.envType) || installation.envType === EnvironmentType.ActiveState) {
         return false;
     }
-    if (installation.pythonPath.includes(`${path.sep}shims${path.sep}`)) {
+    if (path.normalize(installation.pythonPath).includes(`${path.sep}shims${path.sep}`)) {
         return false;
     }
     return !workspaceFolderPaths.some(folder =>
