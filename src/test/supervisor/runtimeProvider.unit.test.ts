@@ -1,6 +1,9 @@
 import { expect } from 'chai';
+import * as fs from 'fs';
+import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
+import { when } from 'ts-mockito';
 
 import { EnvironmentType } from '../../client/pythonEnvironments/info';
 import {
@@ -8,6 +11,17 @@ import {
     PythonRuntimeProvider,
 } from '../../client/supervisor/runtimeProvider';
 import { MockOutputChannel } from '../mockClasses';
+import { EXTENSION_ROOT_DIR_FOR_TESTS } from '../constants';
+import { mockedVSCodeNamespaces } from '../vscode-mock';
+
+function createExtensionContext(): vscode.ExtensionContext {
+    const extensionUri = vscode.Uri.file(EXTENSION_ROOT_DIR_FOR_TESTS);
+    return ({
+        extensionPath: extensionUri.fsPath,
+        extensionUri,
+        extension: { packageJSON: { version: '1.0.0' } },
+    } as unknown) as vscode.ExtensionContext;
+}
 
 suite('Python Supervisor - Runtime Provider', () => {
     teardown(() => {
@@ -34,6 +48,28 @@ suite('Python Supervisor - Runtime Provider', () => {
             errorBehavior: 'stop',
             attribution: { source: 'python.supervisor.setWorkingDirectory' },
         });
+    });
+
+    test('provides the Python icon for runtime quick picks and metadata', () => {
+        when(mockedVSCodeNamespaces.workspace!.workspaceFolders).thenReturn([]);
+        const context = createExtensionContext();
+        const provider = new PythonRuntimeProvider(context, {} as any);
+        const installation = {
+            pythonPath: '/usr/bin/python3',
+            envType: EnvironmentType.System,
+            version: '3.13.0',
+        };
+        const expectedIconPath = path.join(EXTENSION_ROOT_DIR_FOR_TESTS, 'resources', 'branding', 'python-icon.svg');
+
+        const iconPath = provider.getRuntimeIconPath(installation) as vscode.Uri;
+        expect(iconPath.fsPath).to.equal(expectedIconPath);
+
+        const metadata = provider.createRuntimeMetadata(
+            context,
+            installation,
+            new MockOutputChannel('python-supervisor'),
+        );
+        expect(metadata.base64EncodedIconSvg).to.equal(fs.readFileSync(expectedIconPath).toString('base64'));
     });
 
     test('waits for PET discovery before refreshing and resolving the active interpreter', async () => {
