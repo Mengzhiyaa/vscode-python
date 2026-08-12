@@ -107,8 +107,8 @@ The extension is available in multiple languages: `de`, `en`, `es`, `fa`, `fr`, 
 
 ## CI And Release
 
-- `.github/workflows/build.yml` packages target VSIX artifacts on branch pushes and republishes them into a single `CI Pre-release` GitHub prerelease.
-- The CI prerelease is recreated from the fixed `ci-latest` tag on each push so it stays at the top of the Releases page and always carries the newest CI VSIX files.
+- `.github/workflows/build.yml` packages target VSIX artifacts on branch pushes and republishes successful `main` builds into a single `CI Pre-release` GitHub prerelease.
+- The CI prerelease is recreated from the fixed `ci-latest` tag on each `main` push so it stays at the top of the Releases page and always carries the newest CI VSIX files.
 - `.github/workflows/release.yml` still handles tagged release packaging and release publication.
 
 ## Questions, issues, feature requests, and contributions

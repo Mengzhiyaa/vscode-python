@@ -1,5 +1,6 @@
 import { Socket } from 'net';
 import * as vscode from 'vscode';
+import { RedactingOutputChannel } from '../logging/redactingLogOutputChannel';
 import {
     DocumentSelector,
     LanguageClient,
@@ -52,9 +53,16 @@ function timeout(ms: number, message: string): Promise<never> {
 let lspOutputChannel: vscode.OutputChannel | undefined;
 function getLspOutputChannel(): vscode.OutputChannel {
     if (!lspOutputChannel) {
-        lspOutputChannel = vscode.window.createOutputChannel('Python Supervisor Language Server');
+        lspOutputChannel = new RedactingOutputChannel(
+            vscode.window.createOutputChannel('Python Supervisor Language Server'),
+        );
     }
     return lspOutputChannel;
+}
+
+export function disposePythonLspOutputChannel(): void {
+    lspOutputChannel?.dispose();
+    lspOutputChannel = undefined;
 }
 
 export class PythonLanguageLsp implements ILanguageLsp {
@@ -120,7 +128,10 @@ export class PythonLanguageLsp implements ILanguageLsp {
             `for session ${this._metadata.sessionId} on port ${port}`;
 
         this.log(message);
-        getLspOutputChannel().appendLine(message);
+        getLspOutputChannel().appendLine(
+            `** Begin Python LSP log for session ${this._dynState.sessionName} ` +
+                `(${this._metadata.sessionId}) on port ${port} at ${new Date().toISOString()} **`,
+        );
 
         this.client = new LanguageClient(clientId, this._languageClientName, serverOptions, clientOptions);
 

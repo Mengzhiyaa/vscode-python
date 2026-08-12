@@ -1,11 +1,12 @@
 import * as vscode from 'vscode';
-import { IExtensionContext } from '../common/types';
+import { IExtensionContext, ILogOutputChannel } from '../common/types';
 import { IInterpreterService } from '../interpreter/contracts';
 import { IServiceContainer } from '../ioc/types';
 import { traceWarn } from '../logging';
 import { PythonBinaryProvider } from './binaryProvider';
 import { registerSupervisorEnvironmentContributions } from './environmentContributions';
 import { PythonLanguageContribution } from './pythonLanguageContribution';
+import { disposePythonLspOutputChannel } from './pythonLsp';
 import type {
     ILanguageRegistrationHandle,
     ILanguageContributionServices,
@@ -20,14 +21,16 @@ let supervisorRegistration:
     | undefined;
 
 function ensureCurrentSupervisorApi(api: ISupervisorFrameworkApi): void {
-    if (api.apiVersion !== 2 ||
+    if (
+        api.apiVersion !== 2 ||
         api.protocolVersion?.major !== 2 ||
         !api.capabilities?.includes('languageCapabilityRegistry') ||
         typeof api.languages?.forExtension !== 'function' ||
-        typeof api.registerEnvironmentContributions !== 'function') {
+        typeof api.registerEnvironmentContributions !== 'function'
+    ) {
         throw new Error(
             `Extension '${SUPERVISOR_EXTENSION_ID}' does not expose the required Supervisor Language API. ` +
-            'Update vscode-supervisor and retry.',
+                'Update vscode-supervisor and retry.',
         );
     }
 }
@@ -56,9 +59,14 @@ export async function activateSupervisor(
         const api = await supervisorExtension.activate();
         ensureCurrentSupervisorApi(api);
         const interpreterService = serviceContainer.get<IInterpreterService>(IInterpreterService);
+        const languageLogChannel = serviceContainer.get<ILogOutputChannel>(ILogOutputChannel);
         const contribution = new PythonLanguageContribution(context, api, interpreterService, serviceContainer);
         const binaryProvider = new PythonBinaryProvider(context);
-        const contributionServices = api.services as ILanguageContributionServices;
+        const contributionServices: ILanguageContributionServices = {
+            ...api.services,
+            logChannel: languageLogChannel,
+            languageLogChannel,
+        };
         let notebookController: ReturnType<PythonLanguageContribution['getNotebookController']> | undefined;
         try {
             notebookController = contribution.getNotebookController(contributionServices);
@@ -72,16 +80,15 @@ export async function activateSupervisor(
                 registrationId: 'core',
                 revision: 1,
             })
+            .setLogChannel(languageLogChannel)
             .setRuntimeProvider(contribution.runtimeProvider)
-            .setSessionManager(contribution.getRuntimeSessionManager(api.services.logChannel))
+            .setSessionManager(contribution.getRuntimeSessionManager(languageLogChannel))
             .setLspFactory(contribution.runtimeProvider.lspFactory)
             .setBinaryProvider(binaryProvider);
         if (notebookController) {
-            builder.addNotebookController(
-                'notebook.python',
-                notebookController.controller,
-                [contribution.runtimeProvider.languageId],
-            );
+            builder.addNotebookController('notebook.python', notebookController.controller, [
+                contribution.runtimeProvider.languageId,
+            ]);
         }
         for (const descriptor of contribution.getOptionalCapabilities()) {
             builder.addOptionalCapability(descriptor);
@@ -94,29 +101,35 @@ export async function activateSupervisor(
             throw error;
         }
         context.subscriptions.push(handle);
+        context.subscriptions.push(new vscode.Disposable(disposePythonLspOutputChannel));
         if (notebookController) {
             context.subscriptions.push(notebookController);
         }
         context.subscriptions.push(registerSupervisorEnvironmentContributions(context, api));
         registered = true;
         registrationHandle = handle;
-        context.subscriptions.push(new vscode.Disposable(() => {
-            if (supervisorRegistration?.state === 'ready' && supervisorRegistration.attempt === attempt) {
+        context.subscriptions.push(
+            new vscode.Disposable(() => {
+                if (supervisorRegistration?.state === 'ready' && supervisorRegistration.attempt === attempt) {
+                    supervisorRegistration = undefined;
+                }
+            }),
+        );
+    })().then(
+        () => {
+            if (supervisorRegistration?.state === 'registering' && supervisorRegistration.attempt === attempt) {
+                supervisorRegistration = registered
+                    ? { state: 'ready', handle: registrationHandle!, attempt }
+                    : undefined;
+            }
+        },
+        (error) => {
+            if (supervisorRegistration?.state === 'registering' && supervisorRegistration.attempt === attempt) {
                 supervisorRegistration = undefined;
             }
-        }));
-    })().then(() => {
-        if (supervisorRegistration?.state === 'registering' && supervisorRegistration.attempt === attempt) {
-            supervisorRegistration = registered
-                ? { state: 'ready', handle: registrationHandle!, attempt }
-                : undefined;
-        }
-    }, (error) => {
-        if (supervisorRegistration?.state === 'registering' && supervisorRegistration.attempt === attempt) {
-            supervisorRegistration = undefined;
-        }
-        throw error;
-    });
+            throw error;
+        },
+    );
 
     supervisorRegistration = { state: 'registering', promise: registrationPromise, attempt };
     return registrationPromise;

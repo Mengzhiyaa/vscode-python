@@ -3,11 +3,7 @@ import * as vscode from 'vscode';
 import { IInterpreterHelper, IInterpreterService } from '../interpreter/contracts';
 import { IPythonPathUpdaterServiceManager } from '../interpreter/configuration/types';
 import { PythonSessionRegistry } from './pythonSessionRegistry';
-import type {
-    ILanguageContributionServices,
-    ILanguageRuntimeSession,
-    RuntimeState,
-} from './types/supervisor-api';
+import type { ILanguageContributionServices, ILanguageRuntimeSession, RuntimeState } from './types/supervisor-api';
 
 const LAST_FOREGROUND_SESSION_ID_KEY = 'pythonSupervisor.lastForegroundSessionId';
 const RUNTIME_STATE_READY = 'ready';
@@ -192,19 +188,20 @@ export class PythonForegroundSessionManager implements vscode.Disposable {
 
     private async activateSession(session: ILanguageRuntimeSession, reason: string): Promise<void> {
         if (!this.canActivateServices(session.state)) {
-            this.log(
+            this.logSession(
+                session,
                 `Skipping LSP activation for ${session.sessionId} (${reason}): session state is '${session.state}'`,
                 vscode.LogLevel.Debug,
             );
             return;
         }
 
-        this.log(`Activating LSP for ${session.sessionId}. Reason: ${reason}`, vscode.LogLevel.Debug);
+        this.logSession(session, `Activating LSP. Reason: ${reason}`, vscode.LogLevel.Debug);
         await session.activateLsp();
     }
 
     private async deactivateSession(session: ILanguageRuntimeSession, reason: string): Promise<void> {
-        this.log(`Deactivating LSP for ${session.sessionId}. Reason: ${reason}`, vscode.LogLevel.Debug);
+        this.logSession(session, `Deactivating LSP. Reason: ${reason}`, vscode.LogLevel.Debug);
         await session.deactivateLsp();
     }
 
@@ -240,10 +237,7 @@ export class PythonForegroundSessionManager implements vscode.Disposable {
             return;
         }
 
-        this.log(
-            `Updating active Python path for foreground session ${session.sessionId} to ${pythonPath}`,
-            vscode.LogLevel.Debug,
-        );
+        this.logSession(session, `Updating active Python path to ${pythonPath}`, vscode.LogLevel.Debug);
         await this._pythonPathUpdaterService.updatePythonPath(
             pythonPath,
             workspaceSelection.configTarget,
@@ -261,19 +255,28 @@ export class PythonForegroundSessionManager implements vscode.Disposable {
         return run;
     }
 
-    private log(message: string, level: vscode.LogLevel = vscode.LogLevel.Info): void {
+    private logSession(
+        session: ILanguageRuntimeSession,
+        message: string,
+        level: vscode.LogLevel = vscode.LogLevel.Info,
+    ): void {
+        if (session.emitLog) {
+            session.emitLog(message, level);
+            return;
+        }
+        const formatted = `[Python Supervisor] [session=${session.sessionId}] ${message}`;
         switch (level) {
             case vscode.LogLevel.Error:
-                this._logChannel.error(`[Python Supervisor] ${message}`);
+                this._logChannel.error(formatted);
                 break;
             case vscode.LogLevel.Warning:
-                this._logChannel.warn(`[Python Supervisor] ${message}`);
+                this._logChannel.warn(formatted);
                 break;
             case vscode.LogLevel.Debug:
-                this._logChannel.debug(`[Python Supervisor] ${message}`);
+                this._logChannel.debug(formatted);
                 break;
             default:
-                this._logChannel.info(`[Python Supervisor] ${message}`);
+                this._logChannel.info(formatted);
                 break;
         }
     }

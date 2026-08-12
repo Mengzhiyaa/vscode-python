@@ -38,10 +38,10 @@ function createBundledBinary(extensionPath: string): string {
 }
 
 function createContext(extensionPath: string): vscode.ExtensionContext {
-    return ({
+    return {
         extensionPath,
         extension: { packageJSON: { positron: { binaryDependencies: { apk: '0.1.0' } } } },
-    } as unknown) as vscode.ExtensionContext;
+    } as unknown as vscode.ExtensionContext;
 }
 
 suite('Python Supervisor - Kernel Spec', () => {
@@ -153,15 +153,14 @@ suite('Python Supervisor - Kernel Spec', () => {
         process.env.PATH = '';
         sinon.stub(workspaceApis, 'getConfiguration').returns({ get: sinon.stub().returns('') } as any);
 
-        const kernelSpec = await createApkKernelSpec(
-            createContext(extensionPath),
-            installation,
-            'console',
-            new MockOutputChannel('python-supervisor'),
-        );
+        const logChannel = new MockOutputChannel('python-supervisor');
+        const kernelSpec = await createApkKernelSpec(createContext(extensionPath), installation, 'console', logChannel);
 
         expect(kernelSpec.argv.slice(1, 3)).to.deep.equal(['--python', installation.pythonPath]);
         expect(kernelSpec.env?.APK_PYTHON_PATH).to.equal(installation.pythonPath);
+        expect(logChannel.output).to.contain('Kernel spec created with 9 argument(s) and 1 environment variable(s)');
+        expect(logChannel.output).not.to.contain('"argv"');
+        expect(logChannel.output).not.to.contain('"APK_PYTHON_PATH"');
     });
 
     test('uses the adjacent apk repository build during extension development', async () => {
