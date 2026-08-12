@@ -29,7 +29,33 @@ const LANGUAGE_LSP_STATE = {
     Running: 'running' as LanguageLspState,
 } as const;
 
-const PYTHON_INMEMORY_SELECTOR: DocumentSelector = [{ language: PYTHON_LANGUAGE, scheme: 'inmemory' }];
+const PYTHON_VDOC_SELECTOR = { language: PYTHON_LANGUAGE, pattern: '**/.vdoc.*.{py,PY}' };
+
+/**
+ * Select the documents owned by a session's language client.
+ *
+ * The foreground console session is the main Python language client, so it
+ * owns regular editor documents as well as console inputs. Notebook sessions
+ * are scoped to their notebook and related virtual documents so they do not
+ * compete with the foreground session for ordinary Python files.
+ */
+export function getDocumentSelectorForSession(notebookUri?: vscode.Uri): DocumentSelector {
+    if (notebookUri) {
+        return [
+            { language: PYTHON_LANGUAGE, pattern: notebookUri.fsPath },
+            PYTHON_VDOC_SELECTOR,
+            { language: PYTHON_LANGUAGE, scheme: 'inmemory' },
+        ];
+    }
+
+    return [
+        { language: PYTHON_LANGUAGE, scheme: 'untitled' },
+        { language: PYTHON_LANGUAGE, scheme: 'inmemory' },
+        { language: PYTHON_LANGUAGE, scheme: 'assistant-code-confirmation-widget' },
+        { language: PYTHON_LANGUAGE, pattern: '**/*.py' },
+        PYTHON_VDOC_SELECTOR,
+    ];
+}
 
 class PromiseHandles<T> {
     resolve!: (value: T | PromiseLike<T>) => void;
@@ -117,7 +143,7 @@ export class PythonLanguageLsp implements ILanguageLsp {
         };
 
         const clientOptions: LanguageClientOptions = {
-            documentSelector: PYTHON_INMEMORY_SELECTOR,
+            documentSelector: getDocumentSelectorForSession(this._metadata.notebookUri),
             outputChannel: getLspOutputChannel(),
             revealOutputChannelOn: RevealOutputChannelOn.Never,
         };
