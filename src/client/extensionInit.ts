@@ -4,7 +4,7 @@
 'use strict';
 
 import { Container } from 'inversify';
-import { Disposable, Memento, window } from 'vscode';
+import { Disposable, LogLevel, Memento, window } from 'vscode';
 import { registerTypes as platformRegisterTypes } from './common/platform/serviceRegistry';
 import { registerTypes as processRegisterTypes } from './common/process/serviceRegistry';
 import { registerTypes as commonRegisterTypes } from './common/serviceRegistry';
@@ -27,6 +27,7 @@ import * as pythonEnvironments from './pythonEnvironments';
 import { IDiscoveryAPI } from './pythonEnvironments/base/locator';
 import { registerLogger } from './logging';
 import { OutputChannelLogger } from './logging/outputChannelLogger';
+import { RedactingLogOutputChannel } from './logging/redactingLogOutputChannel';
 
 // The code in this module should do nothing more complex than register
 // objects to DI and simple init (e.g. no side effects).  That implies
@@ -50,9 +51,17 @@ export function initializeGlobals(
     serviceManager.addSingletonInstance<Memento>(IMemento, context.workspaceState, WORKSPACE_MEMENTO);
     serviceManager.addSingletonInstance<IExtensionContext>(IExtensionContext, context);
 
-    const standardOutputChannel = window.createOutputChannel(OutputChannelNames.python, { log: true });
+    const standardOutputChannel = new RedactingLogOutputChannel(
+        window.createOutputChannel(OutputChannelNames.python, { log: true }),
+    );
     disposables.push(standardOutputChannel);
     disposables.push(registerLogger(new OutputChannelLogger(standardOutputChannel)));
+    standardOutputChannel.info(`Log level: ${LogLevel[standardOutputChannel.logLevel]}`);
+    disposables.push(
+        standardOutputChannel.onDidChangeLogLevel((level) => {
+            standardOutputChannel.info(`Log level changed to: ${LogLevel[level]}`);
+        }),
+    );
 
     serviceManager.addSingletonInstance<ILogOutputChannel>(ILogOutputChannel, standardOutputChannel);
 

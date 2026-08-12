@@ -479,6 +479,8 @@ export interface ILanguageRuntimeClientInstance extends vscode.Disposable {
     getClientId(): string;
     getClientType(): LanguageRuntimeClientType;
 }
+/** Output channels associated with one runtime session. */
+export type RuntimeSessionOutputChannel = 'console' | 'kernel' | 'lsp';
 export interface ILanguageRuntimeSession {
     readonly sessionId: string;
     readonly state: RuntimeState;
@@ -511,6 +513,12 @@ export interface ILanguageRuntimeSession {
     readonly onDidReceiveRuntimeMessageIPyWidget: vscode.Event<RuntimeIPyWidgetMessage>;
     readonly onDidReceiveRuntimeMessageDebugEvent: vscode.Event<RuntimeDebugEventMessage>;
     readonly onDidReceiveRuntimeMessageDebugReply: vscode.Event<RuntimeDebugReplyMessage>;
+    /** Writes a language-owned lifecycle event to this session's Supervisor channel. */
+    emitLog?(message: string, level?: vscode.LogLevel): void;
+    /** Lists the diagnostic channels available for this session. */
+    listOutputChannels?(): readonly RuntimeSessionOutputChannel[];
+    /** Shows a diagnostic channel belonging to this session. */
+    showOutput?(channel?: RuntimeSessionOutputChannel): void;
     activateLsp(): Promise<void>;
     deactivateLsp(): Promise<void>;
     startDap(targetName: string, debugType: string, debugName: string): Promise<void>;
@@ -759,7 +767,12 @@ export interface IRuntimeStartupService {
  * ownership is deliberately absent and must go through `api.languages`.
  */
 export interface ILanguageContributionServices {
+    /** @deprecated Use languageLogChannel for language-owned diagnostics. */
     readonly logChannel: vscode.LogOutputChannel;
+    /** Supervisor framework diagnostics. Language extensions should rarely write here. */
+    readonly frameworkLogChannel?: vscode.LogOutputChannel;
+    /** Diagnostics owned by the registered language extension. */
+    readonly languageLogChannel?: vscode.LogOutputChannel;
     readonly runtimeSessionService: Omit<IRuntimeSessionService, 'registerNotebookController' | 'registerSessionManager'>;
     readonly runtimeStartupService: Omit<IRuntimeStartupService, 'registerRuntimeManager'>;
     readonly positronNewFolderService: IPositronNewFolderService;
@@ -852,6 +865,8 @@ export interface ILanguageNotebookControllerCapability {
 export interface ILanguageCapabilitySnapshot {
     readonly identity: ILanguageRegistrationIdentity;
     readonly generation: number;
+    /** Language-owned channel. The registering extension retains disposal ownership. */
+    readonly logChannel?: vscode.LogOutputChannel;
     readonly runtimeProvider?: ILanguageRuntimeProvider<unknown>;
     readonly lspFactory?: ILanguageLspFactory;
     readonly binaryProvider?: IBinaryProvider;
@@ -876,6 +891,8 @@ export interface ILanguageRegistrationHandle extends vscode.Disposable {
     retry(capabilityId?: string): void;
 }
 export interface ILanguageRegistrationBuilder {
+    /** Associates an extension-owned language log channel with every registered capability. */
+    setLogChannel(logChannel: vscode.LogOutputChannel): this;
     setRuntimeProvider<TInstallation>(provider: ILanguageRuntimeProvider<TInstallation>): this;
     setLspFactory(factory: ILanguageLspFactory): this;
     setBinaryProvider(provider: IBinaryProvider): this;

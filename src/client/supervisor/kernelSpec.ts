@@ -229,7 +229,10 @@ export async function createApkKernelSpec(
     };
 
     logChannel.info(`[Python Supervisor] Using apk kernel at ${apkPath}`);
-    logChannel.debug(`[Python Supervisor] Kernel spec: ${JSON.stringify(kernelSpec)}`);
+    logChannel.debug(
+        `[Python Supervisor] Kernel spec created with ${kernelSpec.argv.length} argument(s) and ` +
+            `${Object.keys(kernelSpec.env ?? {}).length} environment variable(s)`,
+    );
 
     return kernelSpec;
 }

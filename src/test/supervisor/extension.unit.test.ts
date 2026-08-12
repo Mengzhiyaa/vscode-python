@@ -13,24 +13,24 @@ suite('Python Supervisor - Extension Registration', () => {
     });
 
     test('declares passive Python language assets in the package manifest', () => {
-        const packageJson = JSON.parse(
-            fs.readFileSync(path.resolve(__dirname, '../../..', 'package.json'), 'utf8'),
-        );
+        const packageJson = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../..', 'package.json'), 'utf8'));
 
         expect(packageJson.supervisor).to.deep.equal({
             languageAssetsVersion: 1,
-            languages: [{
-                languageId: 'python',
-                displayName: 'Python',
-                assets: {
-                    localResourceRoots: ['./resources/supervisor', './syntaxes'],
-                    monacoSupportModule: './resources/supervisor/pythonMonacoSupport.js',
-                    textMateGrammar: {
-                        scopeName: 'source.python',
-                        path: './syntaxes/MagicPython.tmLanguage.json',
+            languages: [
+                {
+                    languageId: 'python',
+                    displayName: 'Python',
+                    assets: {
+                        localResourceRoots: ['./resources/supervisor', './syntaxes'],
+                        monacoSupportModule: './resources/supervisor/pythonMonacoSupport.js',
+                        textMateGrammar: {
+                            scopeName: 'source.python',
+                            path: './syntaxes/MagicPython.tmLanguage.json',
+                        },
                     },
                 },
-            }],
+            ],
         });
     });
 
@@ -38,7 +38,7 @@ suite('Python Supervisor - Extension Registration', () => {
         const extensionUri = vscode.Uri.file('/tmp/python-extension');
         const replaceEnvironmentVariable = 1 as vscode.EnvironmentVariableMutatorType;
         let startupValue = '/tmp/pythonrc.py';
-        const context = ({
+        const context = {
             extension: {
                 id: 'ms-python.python',
                 packageJSON: {
@@ -61,7 +61,7 @@ suite('Python Supervisor - Extension Registration', () => {
                     });
                 },
             },
-        } as unknown) as vscode.ExtensionContext;
+        } as unknown as vscode.ExtensionContext;
         const environmentRegistrationDisposals = [sinon.spy(), sinon.spy()];
         const registerEnvironmentContributions = sinon.stub();
         environmentRegistrationDisposals.forEach((dispose, index) => {
@@ -77,6 +77,7 @@ suite('Python Supervisor - Extension Registration', () => {
         const handle = new vscode.Disposable(() => undefined);
         const setBinaryProvider = sinon.stub();
         const builder = {
+            setLogChannel: sinon.stub(),
             setRuntimeProvider: sinon.stub(),
             setSessionManager: sinon.stub(),
             setLspFactory: sinon.stub(),
@@ -86,6 +87,7 @@ suite('Python Supervisor - Extension Registration', () => {
             commit: sinon.stub().returns(handle),
         };
         for (const method of [
+            builder.setLogChannel,
             builder.setRuntimeProvider,
             builder.setSessionManager,
             builder.setLspFactory,
@@ -169,7 +171,7 @@ suite('Python Supervisor - Extension Registration', () => {
 
     test('shares a registration attempt and retains independent capability ownership', async () => {
         const extensionUri = vscode.Uri.file('/tmp/python-extension-registry');
-        const context = ({
+        const context = {
             extension: {
                 id: 'ms-python.python',
                 packageJSON: {
@@ -180,7 +182,7 @@ suite('Python Supervisor - Extension Registration', () => {
             extensionUri,
             subscriptions: [],
             environmentVariableCollection: { forEach: sinon.stub() },
-        } as unknown) as vscode.ExtensionContext;
+        } as unknown as vscode.ExtensionContext;
         const notebookController = {
             dispose: sinon.spy(),
         } as unknown as vscode.NotebookController;
@@ -191,6 +193,7 @@ suite('Python Supervisor - Extension Registration', () => {
         notebooks.createNotebookController = sinon.stub().returns(notebookController);
 
         const setRuntimeProvider = sinon.stub();
+        const setLogChannel = sinon.stub();
         const setSessionManager = sinon.stub();
         const setLspFactory = sinon.stub();
         const setBinaryProvider = sinon.stub();
@@ -198,6 +201,7 @@ suite('Python Supervisor - Extension Registration', () => {
         const addOptionalCapability = sinon.stub();
         const handle = new vscode.Disposable(sinon.spy());
         const builder = {
+            setLogChannel,
             setRuntimeProvider,
             setSessionManager,
             setLspFactory,
@@ -207,6 +211,7 @@ suite('Python Supervisor - Extension Registration', () => {
             commit: sinon.stub().returns(handle),
         };
         for (const method of [
+            setLogChannel,
             setRuntimeProvider,
             setSessionManager,
             setLspFactory,
@@ -230,9 +235,11 @@ suite('Python Supervisor - Extension Registration', () => {
         };
         let resolveActivation: ((value: unknown) => void) | undefined;
         const supervisorExtension = {
-            activate: sinon.stub().returns(new Promise((resolve) => {
-                resolveActivation = resolve;
-            })),
+            activate: sinon.stub().returns(
+                new Promise((resolve) => {
+                    resolveActivation = resolve;
+                }),
+            ),
         };
         sinon.stub(vscode.extensions, 'getExtension').returns(supervisorExtension as any);
         const serviceContainer = { get: sinon.stub().returns({}) };
@@ -250,6 +257,8 @@ suite('Python Supervisor - Extension Registration', () => {
             revision: 1,
         });
         expect(setRuntimeProvider.firstCall.args[0].languageId).to.equal('python');
+        sinon.assert.calledOnce(setLogChannel);
+        expect(setLogChannel.firstCall.args[0]).to.equal(serviceContainer.get.returnValues[1]);
         expect(setSessionManager.firstCall.args[0].managesRuntime).to.be.a('function');
         expect(setLspFactory.firstCall.args[0].languageId).to.equal('python');
         expect(setBinaryProvider.firstCall.args[0].getBinaryDefinitions).to.be.a('function');
@@ -287,10 +296,10 @@ suite('Python Supervisor - Extension Registration', () => {
         notebooks.createNotebookController = sinon.stub().throws(new Error('notebook API unavailable'));
         supervisorExtension.activate.resetBehavior();
         supervisorExtension.activate.resolves(api);
-        const coreOnlyContext = ({
+        const coreOnlyContext = {
             ...context,
             subscriptions: [],
-        } as unknown) as vscode.ExtensionContext;
+        } as unknown as vscode.ExtensionContext;
 
         await activateSupervisor(coreOnlyContext as any, serviceContainer as any);
 

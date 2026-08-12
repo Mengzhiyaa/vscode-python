@@ -34,6 +34,7 @@ suite('Python Supervisor - Foreground Session Manager', () => {
             },
             activateLsp: sinon.stub().resolves(),
             deactivateLsp: sinon.stub().resolves(),
+            emitLog: sinon.stub(),
             onDidChangeRuntimeState: stateEmitter.event,
             emitState: (state: string) => stateEmitter.fire(state),
         };
@@ -41,14 +42,14 @@ suite('Python Supervisor - Foreground Session Manager', () => {
 
     function createContext(initialState: Record<string, string | null> = {}) {
         const state = new Map<string, string | null>(Object.entries(initialState));
-        return ({
+        return {
             workspaceState: {
                 get: (key: string) => state.get(key),
                 update: async (key: string, value: string | null) => {
                     state.set(key, value);
                 },
             },
-        } as unknown) as vscode.ExtensionContext;
+        } as unknown as vscode.ExtensionContext;
     }
 
     function createRuntimeSessionService(activeSessions: any[] = [], foregroundSession?: any) {
@@ -84,16 +85,16 @@ suite('Python Supervisor - Foreground Session Manager', () => {
             createContext(),
             runtimeSessionService as any,
             new PythonSessionRegistry(),
-            ({ updatePythonPath: sinon.stub().resolves() } as unknown) as IPythonPathUpdaterServiceManager,
-            ({
+            { updatePythonPath: sinon.stub().resolves() } as unknown as IPythonPathUpdaterServiceManager,
+            {
                 getActiveWorkspaceUri: () => ({
                     folderUri: vscode.Uri.file('/workspace'),
                     configTarget: vscode.ConfigurationTarget.Workspace,
                 }),
-            } as unknown) as IInterpreterHelper,
-            ({
+            } as unknown as IInterpreterHelper,
+            {
                 getActiveInterpreter: sinon.stub().resolves(undefined),
-            } as unknown) as IInterpreterService,
+            } as unknown as IInterpreterService,
             new MockOutputChannel('python-supervisor'),
         );
 
@@ -108,6 +109,41 @@ suite('Python Supervisor - Foreground Session Manager', () => {
         sinon.assert.calledOnce(consoleA.deactivateLsp);
         sinon.assert.calledOnce(consoleB.activateLsp);
         sinon.assert.notCalled(consoleB.deactivateLsp);
+        sinon.assert.calledWithExactly(
+            consoleA.emitLog,
+            'Activating LSP. Reason: foreground session changed',
+            vscode.LogLevel.Debug,
+        );
+        sinon.assert.calledWithExactly(
+            consoleA.emitLog,
+            'Deactivating LSP. Reason: foreground session changed',
+            vscode.LogLevel.Debug,
+        );
+        manager.dispose();
+    });
+
+    test('falls back to the Python language channel for an older Supervisor session', async () => {
+        const consoleSession = createSession('legacy-console', 'console');
+        (consoleSession as { emitLog?: sinon.SinonStub }).emitLog = undefined;
+        const runtimeSessionService = createRuntimeSessionService();
+        const logChannel = new MockOutputChannel('python');
+        const manager = new PythonForegroundSessionManager(
+            createContext(),
+            runtimeSessionService as any,
+            new PythonSessionRegistry(),
+            { updatePythonPath: sinon.stub().resolves() } as unknown as IPythonPathUpdaterServiceManager,
+            { getActiveWorkspaceUri: () => undefined } as unknown as IInterpreterHelper,
+            { getActiveInterpreter: sinon.stub().resolves(undefined) } as unknown as IInterpreterService,
+            logChannel,
+        );
+
+        runtimeSessionService.emitCreateSession(consoleSession);
+        runtimeSessionService.emitForegroundSession(consoleSession);
+        await flushQueue();
+
+        expect(logChannel.output).to.contain(
+            '[Python Supervisor] [session=legacy-console] Activating LSP. Reason: foreground session changed',
+        );
         manager.dispose();
     });
 
@@ -119,16 +155,16 @@ suite('Python Supervisor - Foreground Session Manager', () => {
             createContext(),
             runtimeSessionService as any,
             new PythonSessionRegistry(),
-            ({ updatePythonPath: sinon.stub().resolves() } as unknown) as IPythonPathUpdaterServiceManager,
-            ({
+            { updatePythonPath: sinon.stub().resolves() } as unknown as IPythonPathUpdaterServiceManager,
+            {
                 getActiveWorkspaceUri: () => ({
                     folderUri: vscode.Uri.file('/workspace'),
                     configTarget: vscode.ConfigurationTarget.Workspace,
                 }),
-            } as unknown) as IInterpreterHelper,
-            ({
+            } as unknown as IInterpreterHelper,
+            {
                 getActiveInterpreter: sinon.stub().resolves(undefined),
-            } as unknown) as IInterpreterService,
+            } as unknown as IInterpreterService,
             new MockOutputChannel('python-supervisor'),
         );
 
@@ -154,16 +190,16 @@ suite('Python Supervisor - Foreground Session Manager', () => {
             createContext(),
             runtimeSessionService as any,
             new PythonSessionRegistry(),
-            ({ updatePythonPath } as unknown) as IPythonPathUpdaterServiceManager,
-            ({
+            { updatePythonPath } as unknown as IPythonPathUpdaterServiceManager,
+            {
                 getActiveWorkspaceUri: () => ({
                     folderUri: vscode.Uri.file('/workspace'),
                     configTarget: vscode.ConfigurationTarget.Workspace,
                 }),
-            } as unknown) as IInterpreterHelper,
-            ({
+            } as unknown as IInterpreterHelper,
+            {
                 getActiveInterpreter: sinon.stub().resolves({ path: '/tmp/other/python' }),
-            } as unknown) as IInterpreterService,
+            } as unknown as IInterpreterService,
             new MockOutputChannel('python-supervisor'),
         );
 
@@ -191,16 +227,16 @@ suite('Python Supervisor - Foreground Session Manager', () => {
             context,
             runtimeSessionService as any,
             new PythonSessionRegistry(),
-            ({ updatePythonPath: sinon.stub().resolves() } as unknown) as IPythonPathUpdaterServiceManager,
-            ({
+            { updatePythonPath: sinon.stub().resolves() } as unknown as IPythonPathUpdaterServiceManager,
+            {
                 getActiveWorkspaceUri: () => ({
                     folderUri: vscode.Uri.file('/workspace'),
                     configTarget: vscode.ConfigurationTarget.Workspace,
                 }),
-            } as unknown) as IInterpreterHelper,
-            ({
+            } as unknown as IInterpreterHelper,
+            {
                 getActiveInterpreter: sinon.stub().resolves(undefined),
-            } as unknown) as IInterpreterService,
+            } as unknown as IInterpreterService,
             new MockOutputChannel('python-supervisor'),
         );
 
@@ -223,16 +259,16 @@ suite('Python Supervisor - Foreground Session Manager', () => {
             context,
             runtimeSessionService as any,
             new PythonSessionRegistry(),
-            ({ updatePythonPath: sinon.stub().resolves() } as unknown) as IPythonPathUpdaterServiceManager,
-            ({
+            { updatePythonPath: sinon.stub().resolves() } as unknown as IPythonPathUpdaterServiceManager,
+            {
                 getActiveWorkspaceUri: () => ({
                     folderUri: vscode.Uri.file('/workspace'),
                     configTarget: vscode.ConfigurationTarget.Workspace,
                 }),
-            } as unknown) as IInterpreterHelper,
-            ({
+            } as unknown as IInterpreterHelper,
+            {
                 getActiveInterpreter: sinon.stub().resolves(undefined),
-            } as unknown) as IInterpreterService,
+            } as unknown as IInterpreterService,
             new MockOutputChannel('python-supervisor'),
         );
 
