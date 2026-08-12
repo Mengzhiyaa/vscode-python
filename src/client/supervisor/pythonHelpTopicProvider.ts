@@ -24,32 +24,14 @@ export class PythonHelpTopicProvider {
         position: vscode.Position,
         token: vscode.CancellationToken,
     ): Promise<string | undefined> {
-        return this.withOpenDocument(document, async () => {
-            const params: HelpTopicParams = {
-                textDocument: this._client.code2ProtocolConverter.asVersionedTextDocumentIdentifier(document),
-                position: this._client.code2ProtocolConverter.asPosition(position),
-            };
-
-            const response = await this._client.sendRequest(PythonHelpTopicRequest.type, params, token);
-            return response?.topic;
-        });
-    }
-
-    private async withOpenDocument<T>(document: vscode.TextDocument, fn: () => Promise<T>): Promise<T> {
-        const textDocument = {
-            uri: document.uri.toString(),
-            languageId: document.languageId,
-            version: document.version,
-            text: document.getText(),
+        // Editor document synchronization is managed by LanguageClient. Do not
+        // close the shared document after this one request.
+        const params: HelpTopicParams = {
+            textDocument: this._client.code2ProtocolConverter.asVersionedTextDocumentIdentifier(document),
+            position: this._client.code2ProtocolConverter.asPosition(position),
         };
 
-        this._client.sendNotification('textDocument/didOpen', { textDocument });
-        try {
-            return await fn();
-        } finally {
-            this._client.sendNotification('textDocument/didClose', {
-                textDocument: { uri: textDocument.uri },
-            });
-        }
+        const response = await this._client.sendRequest(PythonHelpTopicRequest.type, params, token);
+        return response?.topic;
     }
 }

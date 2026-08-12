@@ -73,57 +73,40 @@ export class PythonStatementRangeProvider {
         position: vscode.Position,
         token: vscode.CancellationToken,
     ): Promise<PythonStatementRange | undefined> {
-        return this.withOpenDocument(document, async () => {
-            const params: StatementRangeParams = {
-                textDocument: this._client.code2ProtocolConverter.asVersionedTextDocumentIdentifier(document),
-                position: this._client.code2ProtocolConverter.asPosition(position),
-            };
+        // The language client owns the lifecycle of editor documents selected by
+        // this LSP. Sending an extra didOpen/didClose pair here would leave the
+        // client believing the document is open after the server has closed it.
+        const params: StatementRangeParams = {
+            textDocument: this._client.code2ProtocolConverter.asVersionedTextDocumentIdentifier(document),
+            position: this._client.code2ProtocolConverter.asPosition(position),
+        };
 
-            const response = await this._client.sendRequest(PythonStatementRangeRequest.type, params, token);
-            if (!response) {
-                return undefined;
-            }
+        const response = await this._client.sendRequest(PythonStatementRangeRequest.type, params, token);
+        if (!response) {
+            return undefined;
+        }
 
-            if (!('kind' in response)) {
+        if (!('kind' in response)) {
+            const range = this._client.protocol2CodeConverter.asRange(response.range);
+            const code = typeof response.code === 'string' ? response.code : undefined;
+            return { range, code };
+        }
+
+        switch (response.kind) {
+            case StatementRangeKind.Success: {
                 const range = this._client.protocol2CodeConverter.asRange(response.range);
                 const code = typeof response.code === 'string' ? response.code : undefined;
                 return { range, code };
             }
-
-            switch (response.kind) {
-                case StatementRangeKind.Success: {
-                    const range = this._client.protocol2CodeConverter.asRange(response.range);
-                    const code = typeof response.code === 'string' ? response.code : undefined;
-                    return { range, code };
+            case StatementRangeKind.Rejection:
+                if (response.rejectionKind === StatementRangeRejectionKind.Syntax) {
+                    throw new PythonStatementRangeSyntaxError(response.line);
                 }
-                case StatementRangeKind.Rejection:
-                    if (response.rejectionKind === StatementRangeRejectionKind.Syntax) {
-                        throw new PythonStatementRangeSyntaxError(response.line);
-                    }
-                    throw new Error(`Unrecognized statement range rejection kind: ${response.rejectionKind}`);
-                default:
-                    throw new Error(
-                        `Unrecognized statement range response kind: ${String((response as { kind?: unknown }).kind)}`,
-                    );
-            }
-        });
-    }
-
-    private async withOpenDocument<T>(document: vscode.TextDocument, fn: () => Promise<T>): Promise<T> {
-        const textDocument = {
-            uri: document.uri.toString(),
-            languageId: document.languageId,
-            version: document.version,
-            text: document.getText(),
-        };
-
-        this._client.sendNotification('textDocument/didOpen', { textDocument });
-        try {
-            return await fn();
-        } finally {
-            this._client.sendNotification('textDocument/didClose', {
-                textDocument: { uri: textDocument.uri },
-            });
+                throw new Error(`Unrecognized statement range rejection kind: ${response.rejectionKind}`);
+            default:
+                throw new Error(
+                    `Unrecognized statement range response kind: ${String((response as { kind?: unknown }).kind)}`,
+                );
         }
     }
 }
