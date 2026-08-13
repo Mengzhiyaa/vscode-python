@@ -201,6 +201,33 @@ function createDisplayName(installation: PythonRuntimeInstallation): string {
     return `Python (${label})`;
 }
 
+export function getApkEnvironmentVariables(installation: PythonRuntimeInstallation): Record<string, string> {
+    const env: Record<string, string> = {
+        APK_PYTHON_PATH: installation.pythonPath,
+    };
+
+    const prefix = [installation.sysPrefix, installation.envPath].find((candidate) => candidate?.trim())?.trim();
+    if (!prefix) {
+        return env;
+    }
+
+    const variable =
+        process.platform === 'linux'
+            ? 'LD_LIBRARY_PATH'
+            : process.platform === 'darwin'
+            ? 'DYLD_LIBRARY_PATH'
+            : undefined;
+    if (!variable) {
+        return env;
+    }
+
+    const libraryPath = path.join(prefix, 'lib');
+    const inherited = process.env[variable];
+    env[variable] = inherited ? `${libraryPath}${path.delimiter}${inherited}` : libraryPath;
+
+    return env;
+}
+
 export async function createApkKernelSpec(
     context: vscode.ExtensionContext,
     installation: PythonRuntimeInstallation,
@@ -222,9 +249,7 @@ export async function createApkKernelSpec(
         ],
         display_name: createDisplayName(installation),
         language: 'python',
-        env: {
-            APK_PYTHON_PATH: installation.pythonPath,
-        },
+        env: getApkEnvironmentVariables(installation),
         kernel_protocol_version: '5.5',
     };
 
