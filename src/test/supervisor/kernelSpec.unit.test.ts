@@ -6,7 +6,7 @@ import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 
-import { createApkKernelSpec } from '../../client/supervisor/kernelSpec';
+import { createApkKernelSpec, getApkEnvironmentVariables } from '../../client/supervisor/kernelSpec';
 import * as workspaceApis from '../../client/common/vscodeApis/workspaceApis';
 import { EnvironmentType } from '../../client/pythonEnvironments/info';
 import type { PythonRuntimeInstallation } from '../../client/supervisor/runtimeProvider';
@@ -51,11 +51,15 @@ suite('Python Supervisor - Kernel Spec', () => {
     };
     let originalApkEnv: string | undefined;
     let originalPath: string | undefined;
+    let originalLdLibraryPath: string | undefined;
+    let originalDyldLibraryPath: string | undefined;
     let tempDirs: string[];
 
     setup(() => {
         originalApkEnv = process.env[APK_BINARY_ENV_VAR];
         originalPath = process.env.PATH;
+        originalLdLibraryPath = process.env.LD_LIBRARY_PATH;
+        originalDyldLibraryPath = process.env.DYLD_LIBRARY_PATH;
         tempDirs = [];
     });
 
@@ -67,6 +71,16 @@ suite('Python Supervisor - Kernel Spec', () => {
             process.env[APK_BINARY_ENV_VAR] = originalApkEnv;
         }
         process.env.PATH = originalPath;
+        if (originalLdLibraryPath === undefined) {
+            delete process.env.LD_LIBRARY_PATH;
+        } else {
+            process.env.LD_LIBRARY_PATH = originalLdLibraryPath;
+        }
+        if (originalDyldLibraryPath === undefined) {
+            delete process.env.DYLD_LIBRARY_PATH;
+        } else {
+            process.env.DYLD_LIBRARY_PATH = originalDyldLibraryPath;
+        }
         for (const tempDir of tempDirs) {
             fs.rmSync(tempDir, { force: true, recursive: true });
         }
@@ -161,6 +175,51 @@ suite('Python Supervisor - Kernel Spec', () => {
         expect(logChannel.output).to.contain('Kernel spec created with 9 argument(s) and 1 environment variable(s)');
         expect(logChannel.output).not.to.contain('"argv"');
         expect(logChannel.output).not.to.contain('"APK_PYTHON_PATH"');
+    });
+
+    test('prepends the Python sysPrefix library directory on Linux', () => {
+        sinon.stub(process, 'platform').value('linux');
+        process.env.LD_LIBRARY_PATH = '/host/lib:/another/lib';
+
+        const env = getApkEnvironmentVariables({
+            ...installation,
+            sysPrefix: '/opt/conda/envs/scvi',
+            envPath: '/opt/conda/envs/fallback',
+        });
+
+        expect(env).to.deep.equal({
+            APK_PYTHON_PATH: installation.pythonPath,
+            LD_LIBRARY_PATH: '/opt/conda/envs/scvi/lib:/host/lib:/another/lib',
+        });
+    });
+
+    test('uses envPath and sets DYLD_LIBRARY_PATH on macOS', () => {
+        sinon.stub(process, 'platform').value('darwin');
+        delete process.env.DYLD_LIBRARY_PATH;
+
+        const env = getApkEnvironmentVariables({
+            ...installation,
+            sysPrefix: '',
+            envPath: '/opt/conda/envs/scvi',
+        });
+
+        expect(env).to.deep.equal({
+            APK_PYTHON_PATH: installation.pythonPath,
+            DYLD_LIBRARY_PATH: '/opt/conda/envs/scvi/lib',
+        });
+    });
+
+    test('does not set a dynamic library path on Windows', () => {
+        sinon.stub(process, 'platform').value('win32');
+
+        const env = getApkEnvironmentVariables({
+            ...installation,
+            sysPrefix: 'C:\\conda\\envs\\scvi',
+        });
+
+        expect(env).to.deep.equal({
+            APK_PYTHON_PATH: installation.pythonPath,
+        });
     });
 
     test('uses the adjacent apk repository build during extension development', async () => {
