@@ -128,7 +128,9 @@ suite('Python Supervisor - Console Execution Service', () => {
             file,
             false,
         );
-        sinon.assert.calledOnceWithExactly(executeCommandStub, 'supervisor.console.executeCode');
+        sinon.assert.calledOnceWithExactly(executeCommandStub, 'supervisor.console.executeCode', {
+            allowIncomplete: true,
+        });
     });
 
     test('executes selection commands against the live console session without re-routing runtimes', async () => {
@@ -148,7 +150,25 @@ suite('Python Supervisor - Console Execution Service', () => {
         );
 
         sinon.assert.notCalled(runtimeRouter.ensureConsoleSession);
-        sinon.assert.calledOnceWithExactly(executeCommandStub, 'supervisor.console.executeCode');
+        sinon.assert.calledOnceWithExactly(executeCommandStub, 'supervisor.console.executeCode', {
+            allowIncomplete: true,
+        });
+    });
+
+    test('passes allowIncomplete when executing a selection without advancing', async () => {
+        const executeCommandStub = sinon.stub().resolves(undefined);
+        const file = vscode.Uri.file('/tmp/test.py');
+        (vscode.commands as any).executeCommand = executeCommandStub;
+
+        await service.executeSelectionCommand(
+            'python.executeSelectionInSupervisorWithoutAdvancing',
+            'supervisor.console.executeCodeWithoutAdvancing',
+            file,
+        );
+
+        sinon.assert.calledOnceWithExactly(executeCommandStub, 'supervisor.console.executeCodeWithoutAdvancing', {
+            allowIncomplete: true,
+        });
     });
 
     test('warns instead of executing when no supervisor runtime can be resolved', async () => {

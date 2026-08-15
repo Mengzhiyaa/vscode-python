@@ -74,7 +74,12 @@ export class PythonConsoleExecutionService {
             }
         }
 
-        await vscode.commands.executeCommand(command);
+        // A statement-range provider can return a complete compound statement
+        // (for example, a Python `for` block) whose editor range does not carry
+        // the extra blank line expected by the interactive runtime's
+        // `is_complete` check. Match Positron's console execution semantics and
+        // let the console submit the provider-selected fragment as-is.
+        await vscode.commands.executeCommand(command, { allowIncomplete: true });
     }
 
     private createRunFileCode(file: vscode.Uri): string {
