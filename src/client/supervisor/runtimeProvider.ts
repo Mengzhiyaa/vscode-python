@@ -250,6 +250,7 @@ export class PythonRuntimeProvider implements ILanguageRuntimeProvider<PythonRun
         const runtimeShortName = this.getRuntimeShortName(installation);
         return {
             runtimeId: this.createRuntimeId(installation),
+            extensionId: this.extensionId,
             runtimeName: `Python ${runtimeShortName}`,
             runtimeShortName,
             runtimePath: installation.pythonPath,
