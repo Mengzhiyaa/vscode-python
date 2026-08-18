@@ -258,7 +258,11 @@ export class PythonLanguageLsp implements ILanguageLsp {
     }
 
     async requestCompletion(code: string, position: { line: number; character: number }): Promise<any[]> {
-        const result = await this.requestForVirtualDocument<any>('textDocument/completion', code, position);
+        // Console completion is an explicit user invocation (Tab / trigger
+        // suggest), matching the context sent by Positron's editor client.
+        const result = await this.requestForVirtualDocument<any>('textDocument/completion', code, position, {
+            triggerKind: 1,
+        });
         if (Array.isArray(result)) {
             return result;
         }
@@ -287,6 +291,7 @@ export class PythonLanguageLsp implements ILanguageLsp {
         method: string,
         code: string,
         position: { line: number; character: number },
+        completionContext?: { triggerKind: number },
     ): Promise<T | null> {
         if (!this.client || this._state !== LANGUAGE_LSP_STATE.Running) {
             this.log(`LSP not ready for ${method} request`, vscode.LogLevel.Debug);
@@ -306,6 +311,7 @@ export class PythonLanguageLsp implements ILanguageLsp {
             return await this.client.sendRequest(method, {
                 textDocument: { uri },
                 position,
+                ...(completionContext ? { context: completionContext } : {}),
             });
         } catch (error) {
             this.log(`${method} request failed: ${error}`, vscode.LogLevel.Error);
