@@ -163,6 +163,8 @@ export interface LanguageRuntimeMetadata {
     languageId: string;
     languageName: string;
     languageVersion: string;
+    /** Extension that provides this runtime; used to reactivate it before reload restore. */
+    extensionId?: string;
     base64EncodedIconSvg?: string;
     sessionLocation?: LanguageRuntimeSessionLocation;
     startupBehavior?: LanguageRuntimeStartupBehavior;

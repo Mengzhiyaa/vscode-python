@@ -70,6 +70,7 @@ suite('Python Supervisor - Runtime Provider', () => {
             installation,
             new MockOutputChannel('python-supervisor'),
         );
+        expect(metadata.extensionId).to.equal(provider.extensionId);
         expect(metadata.base64EncodedIconSvg).to.equal(fs.readFileSync(expectedIconPath).toString('base64'));
         expect(metadata.runtimeDisplayPath).to.equal(installation.pythonPath);
     });
