@@ -517,6 +517,16 @@
                     "scope": "machine-overridable",
                     "type": "string"
                 },
+                "python.tabSuggest": {
+                    "default": "on",
+                    "description": "%python.tabSuggest.description%",
+                    "enum": [
+                        "on",
+                        "off"
+                    ],
+                    "scope": "window",
+                    "type": "string"
+                },
                 "python.envFile": {
                     "default": "${workspaceFolder}/.env",
                     "description": "%python.envFile.description%",
@@ -1233,6 +1243,11 @@
             }
         ],
         "keybindings": [
+            {
+                "command": "python.triggerSuggestOnTab",
+                "key": "tab",
+                "when": "editorTextFocus && editorLangId == python && python.inTabSuggestContext && config.python.tabSuggest == on && config.editor.tabCompletion == off && config.editor.tabFocusMode == false && !editorTabMovesFocus && !suggestWidgetVisible && !inSnippetMode"
+            },
             {
                 "command": "python.execSelectionInTerminal",
                 "key": "shift+enter",

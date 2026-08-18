@@ -48,6 +48,7 @@ import { registerTriggerForTerminalREPL } from './terminals/codeExecution/termin
 import { registerPythonStartup } from './terminals/pythonStartup';
 import { registerPixiFeatures } from './pythonEnvironments/common/environmentManagers/pixi';
 import { registerCustomTerminalLinkProvider } from './terminals/pythonStartupLinkProvider';
+import { registerPythonTabSuggest } from './supervisor/pythonTabSuggest';
 
 export async function activateComponents(
     // `ext` is passed to any extra activation funcs.
@@ -106,6 +107,7 @@ export function activateFeatures(ext: ExtensionState, _components: Components): 
     registerReplCommands(ext.disposables, interpreterService, executionHelper, commandManager);
     registerReplExecuteOnEnter(ext.disposables, interpreterService, commandManager);
     registerCustomTerminalLinkProvider(ext.disposables);
+    registerPythonTabSuggest(ext.disposables);
 }
 
 /// //////////////////////////

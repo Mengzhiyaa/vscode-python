@@ -5,6 +5,7 @@
     "python.languageModelTools.get_python_executable_details.userDescription": "Get executable info for a Python Environment",
     "python.languageModelTools.configure_python_environment.userDescription": "Configure a Python Environment for a workspace",
     "python.command.python.startNativeREPL.title": "Start Native Python REPL",
+    "python.tabSuggest.description": "Controls whether Tab triggers suggestions in Python editors when there is code before the cursor. Ignored when tab completion or tab focus mode is enabled.",
     "python.command.python.createEnvironment.title": "Create Environment...",
     "python.command.python.createNewFile.title": "New Python File",
     "python.command.python.createTerminal.title": "Create Terminal",
