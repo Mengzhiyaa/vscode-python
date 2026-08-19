@@ -108,7 +108,7 @@ suite('Python Supervisor - Foreground Session Manager', () => {
         sinon.assert.calledOnce(consoleA.activateLsp);
         sinon.assert.calledOnce(consoleA.deactivateLsp);
         sinon.assert.calledOnce(consoleB.activateLsp);
-        sinon.assert.notCalled(consoleB.deactivateLsp);
+        sinon.assert.calledOnce(consoleB.deactivateLsp);
         sinon.assert.calledWithExactly(
             consoleA.emitLog,
             'Activating LSP. Reason: foreground session changed',
@@ -179,6 +179,33 @@ suite('Python Supervisor - Foreground Session Manager', () => {
         sinon.assert.calledOnce(consoleSession.activateLsp);
         sinon.assert.notCalled(consoleSession.deactivateLsp);
         sinon.assert.calledOnce(notebookSession.activateLsp);
+        manager.dispose();
+    });
+
+    test('does not deactivate the Python console LSP when another language becomes foreground', async () => {
+        const pythonSession = createSession('python-console', 'console');
+        const rSession = createSession('r-console', 'console', { languageId: 'r' });
+        const runtimeSessionService = createRuntimeSessionService();
+        const manager = new PythonForegroundSessionManager(
+            createContext(),
+            runtimeSessionService as any,
+            new PythonSessionRegistry(),
+            { updatePythonPath: sinon.stub().resolves() } as unknown as IPythonPathUpdaterServiceManager,
+            { getActiveWorkspaceUri: () => undefined } as unknown as IInterpreterHelper,
+            { getActiveInterpreter: sinon.stub().resolves(undefined) } as unknown as IInterpreterService,
+            new MockOutputChannel('python-supervisor'),
+        );
+
+        runtimeSessionService.emitCreateSession(pythonSession);
+        runtimeSessionService.emitCreateSession(rSession);
+        runtimeSessionService.emitForegroundSession(pythonSession);
+        await flushQueue();
+        pythonSession.deactivateLsp.resetHistory();
+
+        runtimeSessionService.emitForegroundSession(rSession);
+        await flushQueue();
+
+        sinon.assert.notCalled(pythonSession.deactivateLsp);
         manager.dispose();
     });
 

@@ -172,9 +172,38 @@ suite('Python Supervisor - Kernel Spec', () => {
 
         expect(kernelSpec.argv.slice(1, 3)).to.deep.equal(['--python', installation.pythonPath]);
         expect(kernelSpec.env?.APK_PYTHON_PATH).to.equal(installation.pythonPath);
-        expect(logChannel.output).to.contain('Kernel spec created with 9 argument(s) and 1 environment variable(s)');
+        expect(kernelSpec.env?.RUST_LOG).to.equal('warn,apk=warn');
+        expect(logChannel.output).to.contain('Kernel spec created with 9 argument(s) and 2 environment variable(s)');
         expect(logChannel.output).not.to.contain('"argv"');
         expect(logChannel.output).not.to.contain('"APK_PYTHON_PATH"');
+    });
+
+    test('uses separately configured APK and external log levels', async () => {
+        const extensionPath = fs.mkdtempSync(path.join(os.tmpdir(), 'python-supervisor-ext-'));
+        tempDirs.push(extensionPath);
+        createBundledBinary(extensionPath);
+        process.env.PATH = '';
+
+        sinon.stub(workspaceApis, 'getConfiguration').returns({
+            get: sinon.stub().callsFake((key: string) => {
+                if (key === 'supervisor.logLevel') {
+                    return 'debug';
+                }
+                if (key === 'supervisor.logLevelExternal') {
+                    return 'error';
+                }
+                return '';
+            }),
+        } as any);
+
+        const kernelSpec = await createApkKernelSpec(
+            createContext(extensionPath),
+            installation,
+            'console',
+            new MockOutputChannel('python-supervisor'),
+        );
+
+        expect(kernelSpec.env?.RUST_LOG).to.equal('error,apk=debug');
     });
 
     test('prepends the Python sysPrefix library directory on Linux', () => {

@@ -235,6 +235,9 @@ export async function createApkKernelSpec(
     logChannel: vscode.LogOutputChannel,
 ): Promise<JupyterKernelSpec> {
     const apkPath = resolveApkBinaryPath(context, logChannel);
+    const config = workspaceApis.getConfiguration('python');
+    const logLevel = config.get<string>('supervisor.logLevel') || 'warn';
+    const logLevelExternal = config.get<string>('supervisor.logLevelExternal') || 'warn';
     const kernelSpec: JupyterKernelSpec = {
         argv: [
             apkPath,
@@ -249,7 +252,10 @@ export async function createApkKernelSpec(
         ],
         display_name: createDisplayName(installation),
         language: 'python',
-        env: getApkEnvironmentVariables(installation),
+        env: {
+            ...getApkEnvironmentVariables(installation),
+            RUST_LOG: `${logLevelExternal},apk=${logLevel}`,
+        },
         kernel_protocol_version: '5.5',
     };
 

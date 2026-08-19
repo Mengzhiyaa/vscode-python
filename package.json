@@ -517,6 +517,30 @@
                     "scope": "machine-overridable",
                     "type": "string"
                 },
+                "python.supervisor.logLevel": {
+                    "default": "warn",
+                    "description": "Log level for the APK kernel.",
+                    "enum": [
+                        "trace",
+                        "debug",
+                        "info",
+                        "warn",
+                        "error"
+                    ],
+                    "type": "string"
+                },
+                "python.supervisor.logLevelExternal": {
+                    "default": "warn",
+                    "description": "Log level for external crates used by the APK kernel.",
+                    "enum": [
+                        "trace",
+                        "debug",
+                        "info",
+                        "warn",
+                        "error"
+                    ],
+                    "type": "string"
+                },
                 "python.tabSuggest": {
                     "default": "on",
                     "description": "%python.tabSuggest.description%",

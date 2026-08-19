@@ -21,7 +21,6 @@ function comparePaths(left: string, right: string): boolean {
 export class PythonForegroundSessionManager implements vscode.Disposable {
     private readonly _disposables: vscode.Disposable[] = [];
     private _activationQueue: Promise<void> = Promise.resolve();
-    private _activeConsoleSessionId: string | null = null;
 
     constructor(
         private readonly _context: vscode.ExtensionContext,
@@ -45,9 +44,6 @@ export class PythonForegroundSessionManager implements vscode.Disposable {
             this._runtimeSessionService.onDidDeleteRuntimeSession((sessionId) => {
                 if (this.getLastForegroundSessionId() === sessionId) {
                     void this.setLastForegroundSessionId(null);
-                }
-                if (this._activeConsoleSessionId === sessionId) {
-                    this._activeConsoleSessionId = null;
                 }
                 this._registry.deleteSession(sessionId);
             }),
@@ -164,26 +160,23 @@ export class PythonForegroundSessionManager implements vscode.Disposable {
             return;
         }
 
-        const previousForegroundSessionId = this._activeConsoleSessionId;
         await this.setLastForegroundSessionId(session.sessionId);
         await this.syncForegroundPythonPath(session);
-        await this.activateConsoleSession(session, 'foreground session changed', previousForegroundSessionId);
+        await this.activateConsoleSession(session, 'foreground session changed');
     }
 
     private async activateConsoleSession(
         session: ILanguageRuntimeSession,
         reason: string,
-        previousForegroundSessionId: string | null = this._activeConsoleSessionId,
     ): Promise<void> {
-        if (previousForegroundSessionId && previousForegroundSessionId !== session.sessionId) {
-            const previousForegroundSession = this._registry.get(previousForegroundSessionId);
-            if (previousForegroundSession?.metadata.sessionMode === 'console') {
-                await this.deactivateSession(previousForegroundSession, reason);
-            }
-        }
+        await Promise.all(
+            this._registry
+                .getConsoleSessions()
+                .filter((candidate) => candidate.sessionId !== session.sessionId)
+                .map((candidate) => this.deactivateSession(candidate, reason)),
+        );
 
         await this.activateSession(session, reason);
-        this._activeConsoleSessionId = session.sessionId;
     }
 
     private async activateSession(session: ILanguageRuntimeSession, reason: string): Promise<void> {
