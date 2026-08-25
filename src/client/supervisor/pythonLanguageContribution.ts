@@ -239,6 +239,7 @@ export class PythonLanguageContribution {
         private readonly _api: ISupervisorFrameworkApi,
         private readonly _interpreterService: IInterpreterService,
         private readonly _serviceContainer: IServiceContainer,
+        private readonly _dapEnabled = true,
     ) {
         this.runtimeProvider = new PythonRuntimeProvider(_extensionContext, _interpreterService);
     }
@@ -304,6 +305,7 @@ export class PythonLanguageContribution {
             this._serviceContainer.get<IInterpreterHelper>(IInterpreterHelper),
             this._interpreterService,
             services.logChannel,
+            this._dapEnabled,
         );
     }
 

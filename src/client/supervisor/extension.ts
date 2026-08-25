@@ -4,6 +4,7 @@ import { IInterpreterService } from '../interpreter/contracts';
 import { IServiceContainer } from '../ioc/types';
 import { traceWarn } from '../logging';
 import { PythonBinaryProvider } from './binaryProvider';
+import { registerApkDebugAdapterFactory } from './apkDebugger';
 import { registerSupervisorEnvironmentContributions } from './environmentContributions';
 import { PythonLanguageContribution } from './pythonLanguageContribution';
 import { disposePythonLspOutputChannel } from './pythonLsp';
@@ -58,9 +59,26 @@ export async function activateSupervisor(
 
         const api = await supervisorExtension.activate();
         ensureCurrentSupervisorApi(api);
+        const dapEnabled =
+            vscode.workspace.getConfiguration('python')?.get<boolean>('supervisor.enableDap', true) ?? true;
+        // Supervisor creates an internal `apk` attach configuration for the
+        // Console DAP. Register the descriptor before language capabilities are
+        // committed so restored sessions can attach immediately.
+        if (dapEnabled) {
+            const dapRegistration = registerApkDebugAdapterFactory();
+            if (dapRegistration) {
+                context.subscriptions.push(dapRegistration);
+            }
+        }
         const interpreterService = serviceContainer.get<IInterpreterService>(IInterpreterService);
         const languageLogChannel = serviceContainer.get<ILogOutputChannel>(ILogOutputChannel);
-        const contribution = new PythonLanguageContribution(context, api, interpreterService, serviceContainer);
+        const contribution = new PythonLanguageContribution(
+            context,
+            api,
+            interpreterService,
+            serviceContainer,
+            dapEnabled,
+        );
         const binaryProvider = new PythonBinaryProvider(context);
         const contributionServices: ILanguageContributionServices = {
             ...api.services,
