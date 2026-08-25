@@ -15,7 +15,7 @@ suite('Python Supervisor - Foreground Session Manager', () => {
         options: { created?: number; languageId?: string; state?: string } = {},
     ) {
         const stateEmitter = new vscode.EventEmitter<any>();
-        return {
+        const session = {
             sessionId,
             sessionMode,
             state: options.state ?? 'ready',
@@ -34,10 +34,17 @@ suite('Python Supervisor - Foreground Session Manager', () => {
             },
             activateLsp: sinon.stub().resolves(),
             deactivateLsp: sinon.stub().resolves(),
+            startDap: sinon.stub().resolves(),
+            connectDap: sinon.stub().resolves(true),
+            disconnectDap: sinon.stub().resolves(),
             emitLog: sinon.stub(),
             onDidChangeRuntimeState: stateEmitter.event,
-            emitState: (state: string) => stateEmitter.fire(state),
+            emitState: (state: string) => {
+                session.state = state;
+                stateEmitter.fire(state);
+            },
         };
+        return session;
     }
 
     function createContext(initialState: Record<string, string | null> = {}) {
@@ -77,7 +84,7 @@ suite('Python Supervisor - Foreground Session Manager', () => {
         sinon.restore();
     });
 
-    test('activates only the foreground console session LSP', async () => {
+    test('activates only the foreground console session services', async () => {
         const consoleA = createSession('console-a', 'console');
         const consoleB = createSession('console-b', 'console');
         const runtimeSessionService = createRuntimeSessionService();
@@ -109,6 +116,12 @@ suite('Python Supervisor - Foreground Session Manager', () => {
         sinon.assert.calledOnce(consoleA.deactivateLsp);
         sinon.assert.calledOnce(consoleB.activateLsp);
         sinon.assert.calledOnce(consoleB.deactivateLsp);
+        sinon.assert.calledOnceWithExactly(consoleA.startDap, 'apk_dap', 'apk', 'APK Positron Python');
+        sinon.assert.calledOnce(consoleA.connectDap);
+        sinon.assert.calledOnce(consoleA.disconnectDap);
+        sinon.assert.calledOnceWithExactly(consoleB.startDap, 'apk_dap', 'apk', 'APK Positron Python');
+        sinon.assert.calledOnce(consoleB.connectDap);
+        sinon.assert.notCalled(consoleB.disconnectDap);
         sinon.assert.calledWithExactly(
             consoleA.emitLog,
             'Activating LSP. Reason: foreground session changed',
@@ -147,6 +160,30 @@ suite('Python Supervisor - Foreground Session Manager', () => {
         manager.dispose();
     });
 
+    test('does not start or connect DAP when it is disabled', async () => {
+        const consoleSession = createSession('console-a', 'console');
+        const runtimeSessionService = createRuntimeSessionService();
+        const manager = new PythonForegroundSessionManager(
+            createContext(),
+            runtimeSessionService as any,
+            new PythonSessionRegistry(),
+            { updatePythonPath: sinon.stub().resolves() } as unknown as IPythonPathUpdaterServiceManager,
+            { getActiveWorkspaceUri: () => undefined } as unknown as IInterpreterHelper,
+            { getActiveInterpreter: sinon.stub().resolves(undefined) } as unknown as IInterpreterService,
+            new MockOutputChannel('python-supervisor'),
+            false,
+        );
+
+        runtimeSessionService.emitCreateSession(consoleSession);
+        runtimeSessionService.emitForegroundSession(consoleSession);
+        await flushQueue();
+
+        sinon.assert.notCalled(consoleSession.startDap);
+        sinon.assert.notCalled(consoleSession.connectDap);
+        sinon.assert.calledOnce(consoleSession.activateLsp);
+        manager.dispose();
+    });
+
     test('activates notebook session LSP without deactivating the foreground console LSP', async () => {
         const consoleSession = createSession('console-a', 'console');
         const notebookSession = createSession('notebook-a', 'notebook');
@@ -179,6 +216,33 @@ suite('Python Supervisor - Foreground Session Manager', () => {
         sinon.assert.calledOnce(consoleSession.activateLsp);
         sinon.assert.notCalled(consoleSession.deactivateLsp);
         sinon.assert.calledOnce(notebookSession.activateLsp);
+        sinon.assert.notCalled(notebookSession.startDap);
+        sinon.assert.notCalled(notebookSession.connectDap);
+        manager.dispose();
+    });
+
+    test('starts DAP for a ready background console without connecting it', async () => {
+        const foregroundSession = createSession('console-a', 'console');
+        const backgroundSession = createSession('console-b', 'console', { state: 'uninitialized' });
+        const runtimeSessionService = createRuntimeSessionService();
+        const manager = new PythonForegroundSessionManager(
+            createContext({ 'pythonSupervisor.lastForegroundSessionId': foregroundSession.sessionId }),
+            runtimeSessionService as any,
+            new PythonSessionRegistry(),
+            { updatePythonPath: sinon.stub().resolves() } as unknown as IPythonPathUpdaterServiceManager,
+            { getActiveWorkspaceUri: () => undefined } as unknown as IInterpreterHelper,
+            { getActiveInterpreter: sinon.stub().resolves(undefined) } as unknown as IInterpreterService,
+            new MockOutputChannel('python-supervisor'),
+        );
+
+        runtimeSessionService.emitCreateSession(foregroundSession);
+        runtimeSessionService.emitCreateSession(backgroundSession);
+        backgroundSession.emitState('ready');
+        await flushQueue();
+
+        sinon.assert.calledOnceWithExactly(backgroundSession.startDap, 'apk_dap', 'apk', 'APK Positron Python');
+        sinon.assert.notCalled(backgroundSession.connectDap);
+        sinon.assert.notCalled(backgroundSession.activateLsp);
         manager.dispose();
     });
 
@@ -307,6 +371,82 @@ suite('Python Supervisor - Foreground Session Manager', () => {
         expect(context.workspaceState.get('pythonSupervisor.lastForegroundSessionId')).to.equal(
             newestSession.sessionId,
         );
+        manager.dispose();
+    });
+
+    test('disables DAP auto-attach after Supervisor declines the connection', async () => {
+        const consoleSession = createSession('console-a', 'console');
+        consoleSession.connectDap.resolves(false);
+        const runtimeSessionService = createRuntimeSessionService();
+        const manager = new PythonForegroundSessionManager(
+            createContext(),
+            runtimeSessionService as any,
+            new PythonSessionRegistry(),
+            { updatePythonPath: sinon.stub().resolves() } as unknown as IPythonPathUpdaterServiceManager,
+            { getActiveWorkspaceUri: () => undefined } as unknown as IInterpreterHelper,
+            { getActiveInterpreter: sinon.stub().resolves(undefined) } as unknown as IInterpreterService,
+            new MockOutputChannel('python-supervisor'),
+        );
+
+        runtimeSessionService.emitCreateSession(consoleSession);
+        runtimeSessionService.emitForegroundSession(consoleSession);
+        await flushQueue();
+        consoleSession.emitState('ready');
+        await flushQueue();
+
+        sinon.assert.calledOnce(consoleSession.startDap);
+        sinon.assert.calledOnce(consoleSession.connectDap);
+        manager.dispose();
+    });
+
+    test('DAP startup failure does not prevent LSP activation', async () => {
+        const consoleSession = createSession('console-a', 'console');
+        consoleSession.startDap.rejects(new Error('missing apk_dap target'));
+        const runtimeSessionService = createRuntimeSessionService();
+        const manager = new PythonForegroundSessionManager(
+            createContext(),
+            runtimeSessionService as any,
+            new PythonSessionRegistry(),
+            { updatePythonPath: sinon.stub().resolves() } as unknown as IPythonPathUpdaterServiceManager,
+            { getActiveWorkspaceUri: () => undefined } as unknown as IInterpreterHelper,
+            { getActiveInterpreter: sinon.stub().resolves(undefined) } as unknown as IInterpreterService,
+            new MockOutputChannel('python-supervisor'),
+        );
+
+        runtimeSessionService.emitCreateSession(consoleSession);
+        runtimeSessionService.emitForegroundSession(consoleSession);
+        await flushQueue();
+
+        sinon.assert.calledOnce(consoleSession.startDap);
+        sinon.assert.notCalled(consoleSession.connectDap);
+        sinon.assert.calledOnce(consoleSession.activateLsp);
+        manager.dispose();
+    });
+
+    test('disconnects DAP and resets its state when a console session exits', async () => {
+        const consoleSession = createSession('console-a', 'console');
+        const runtimeSessionService = createRuntimeSessionService();
+        const manager = new PythonForegroundSessionManager(
+            createContext(),
+            runtimeSessionService as any,
+            new PythonSessionRegistry(),
+            { updatePythonPath: sinon.stub().resolves() } as unknown as IPythonPathUpdaterServiceManager,
+            { getActiveWorkspaceUri: () => undefined } as unknown as IInterpreterHelper,
+            { getActiveInterpreter: sinon.stub().resolves(undefined) } as unknown as IInterpreterService,
+            new MockOutputChannel('python-supervisor'),
+        );
+
+        runtimeSessionService.emitCreateSession(consoleSession);
+        runtimeSessionService.emitForegroundSession(consoleSession);
+        await flushQueue();
+        consoleSession.emitState('exited');
+        await flushQueue();
+        consoleSession.emitState('ready');
+        await flushQueue();
+
+        sinon.assert.calledTwice(consoleSession.startDap);
+        sinon.assert.calledTwice(consoleSession.connectDap);
+        sinon.assert.calledOnce(consoleSession.disconnectDap);
         manager.dispose();
     });
 });

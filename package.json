@@ -87,14 +87,10 @@
         "onDebugInitialConfigurations",
         "onLanguage:python",
         "onDebugResolve:python",
+        "onDebugResolve:apk",
         "onCommand:python.copilotSetupTests",
-        "onCommand:python.execInConsole",
         "onCommand:python.executeSelectionInSupervisor",
         "onCommand:python.executeSelectionInSupervisorWithoutAdvancing",
-        "onCommand:python.selectSupervisorRuntime",
-        "onCommand:python.restartSupervisorConsole",
-        "onCommand:python.startSupervisorConsole",
-        "onCommand:python.stopSupervisorConsole",
         "workspaceContains:mspythonconfig.json",
         "workspaceContains:pyproject.toml",
         "workspaceContains:Pipfile",
@@ -516,6 +512,12 @@
                     "description": "Path to the apk binary used for supervisor-backed Python runtimes. Leave empty to auto-detect a local build or PATH entry.",
                     "scope": "machine-overridable",
                     "type": "string"
+                },
+                "python.supervisor.enableDap": {
+                    "default": true,
+                    "description": "Whether to enable DAP debugging for supervisor-backed Python console sessions.",
+                    "scope": "window",
+                    "type": "boolean"
                 },
                 "python.supervisor.logLevel": {
                     "default": "warn",
@@ -1243,6 +1245,14 @@
                 },
                 "when": "!virtualWorkspace && shellExecutionSupported",
                 "hiddenWhen": "true"
+            },
+            {
+                "hiddenWhen": "true",
+                "label": "APK Python Debugger",
+                "languages": [
+                    "python"
+                ],
+                "type": "apk"
             }
         ],
         "grammars": [

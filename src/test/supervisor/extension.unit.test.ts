@@ -34,6 +34,28 @@ suite('Python Supervisor - Extension Registration', () => {
         });
     });
 
+    test('declares the APK Console debugger contribution', () => {
+        const packageJson = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../..', 'package.json'), 'utf8'));
+
+        expect(packageJson.contributes.debuggers).to.deep.include({
+            type: 'apk',
+            label: 'APK Python Debugger',
+            languages: ['python'],
+            hiddenWhen: 'true',
+        });
+    });
+
+    test('declares the Supervisor DAP enablement setting', () => {
+        const packageJson = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../..', 'package.json'), 'utf8'));
+
+        expect(packageJson.contributes.configuration.properties['python.supervisor.enableDap']).to.deep.equal({
+            default: true,
+            description: 'Whether to enable DAP debugging for supervisor-backed Python console sessions.',
+            scope: 'window',
+            type: 'boolean',
+        });
+    });
+
     test('rejects stale APIs and retries Python supervisor registration', async () => {
         const extensionUri = vscode.Uri.file('/tmp/python-extension');
         const replaceEnvironmentVariable = 1 as vscode.EnvironmentVariableMutatorType;
