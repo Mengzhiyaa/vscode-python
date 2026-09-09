@@ -70,12 +70,6 @@ class PromiseHandles<T> {
     }
 }
 
-function timeout(ms: number, message: string): Promise<never> {
-    return new Promise((_, reject) => {
-        setTimeout(() => reject(new Error(`Timeout: ${message}`)), ms);
-    });
-}
-
 let lspOutputChannel: vscode.OutputChannel | undefined;
 function getLspOutputChannel(): vscode.OutputChannel {
     if (!lspOutputChannel) {
@@ -161,9 +155,6 @@ export class PythonLanguageLsp implements ILanguageLsp {
 
         this.client = new LanguageClient(clientId, this._languageClientName, serverOptions, clientOptions);
 
-        const out = new PromiseHandles<void>();
-        this._initializing = out.promise;
-
         this.activationDisposables.push(
             this.client.onDidChangeState((event) => {
                 const oldState = this._state;
@@ -172,19 +163,13 @@ export class PythonLanguageLsp implements ILanguageLsp {
                         this.setState(LANGUAGE_LSP_STATE.Starting);
                         break;
                     case State.Running:
-                        if (this._initializing) {
-                            this._initializing = undefined;
-                            if (this.client) {
-                                this.registerPositronLspExtensions(this.client);
-                            }
-                            out.resolve();
+                        if (!this._initializing && this.client) {
+                            void this.startClient(this.client).catch((error) => {
+                                this.log(`LSP restart failed: ${error}`, vscode.LogLevel.Error);
+                            });
                         }
-                        this.setState(LANGUAGE_LSP_STATE.Running);
                         break;
                     case State.Stopped:
-                        if (this._initializing) {
-                            out.reject(new Error('Python language client stopped before initialization'));
-                        }
                         this.setState(LANGUAGE_LSP_STATE.Stopped);
                         break;
                     default:
@@ -198,8 +183,28 @@ export class PythonLanguageLsp implements ILanguageLsp {
             }),
         );
 
-        this.client.start();
-        await out.promise;
+        await this.startClient(this.client);
+    }
+
+    private startClient(client: LanguageClient): Promise<void> {
+        const initializing = Promise.resolve()
+            .then(() => client.start())
+            .then(() => {
+                this.registerPositronLspExtensions(client);
+                this.setState(LANGUAGE_LSP_STATE.Running);
+            });
+        const settled = initializing
+            .catch((error) => {
+                this.setState(LANGUAGE_LSP_STATE.Stopped);
+                throw error;
+            })
+            .finally(() => {
+                if (this._initializing === settled) {
+                    this._initializing = undefined;
+                }
+            });
+        this._initializing = settled;
+        return settled;
     }
 
     async deactivate(): Promise<void> {
@@ -209,17 +214,9 @@ export class PythonLanguageLsp implements ILanguageLsp {
 
         await this._initializing;
 
-        const stopped = new Promise<void>((resolve) => {
-            const disposable = this.client!.onDidChangeState((event) => {
-                if (event.newState === State.Stopped) {
-                    disposable.dispose();
-                    resolve();
-                }
-            });
-        });
-
-        this.client.stop();
-        await Promise.race([stopped, timeout(2000, 'waiting for Python LSP client to stop')]);
+        await this.client.stop();
+        this._statementRangeProvider = undefined;
+        this._helpTopicProvider = undefined;
     }
 
     async wait(): Promise<boolean> {
