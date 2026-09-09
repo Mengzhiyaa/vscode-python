@@ -30,6 +30,9 @@ export class PythonForegroundSessionManager implements vscode.Disposable {
     private readonly _disposables: vscode.Disposable[] = [];
     private readonly _dapSessionStates = new Map<string, DapSessionState>();
     private _activationQueue: Promise<void> = Promise.resolve();
+    private readonly _dapQueues = new Map<string, Promise<void>>();
+    private _activeConsoleSessionId?: string;
+    private _disposed = false;
 
     constructor(
         private readonly _context: vscode.ExtensionContext,
@@ -55,6 +58,9 @@ export class PythonForegroundSessionManager implements vscode.Disposable {
                 if (this.getLastForegroundSessionId() === sessionId) {
                     void this.setLastForegroundSessionId(null);
                 }
+                if (this._activeConsoleSessionId === sessionId) {
+                    this._activeConsoleSessionId = undefined;
+                }
                 this._dapSessionStates.delete(sessionId);
                 this._registry.deleteSession(sessionId);
             }),
@@ -67,6 +73,7 @@ export class PythonForegroundSessionManager implements vscode.Disposable {
     }
 
     dispose(): void {
+        this._disposed = true;
         this._registry.dispose();
         this._dapSessionStates.clear();
         this._disposables.forEach((disposable) => disposable.dispose());
@@ -95,7 +102,7 @@ export class PythonForegroundSessionManager implements vscode.Disposable {
             }
 
             if (session.metadata.sessionMode === 'console') {
-                await this.ensureDapStarted(session);
+                this.scheduleDap(session, false);
             } else if (session.metadata.sessionMode === 'notebook') {
                 await this.activateSession(session, 'notebook session restored');
             }
@@ -148,11 +155,10 @@ export class PythonForegroundSessionManager implements vscode.Disposable {
 
     private async didChangeSessionRuntimeState(session: ILanguageRuntimeSession, state: RuntimeState): Promise<void> {
         if (state === RUNTIME_STATE_EXITED) {
-            try {
-                await this.deactivateSession(session, 'session exited');
-            } finally {
+            await this.deactivateSession(session, 'session exited');
+            this.enqueueDap(session, async () => {
                 this._dapSessionStates.delete(session.sessionId);
-            }
+            });
             return;
         }
 
@@ -169,7 +175,7 @@ export class PythonForegroundSessionManager implements vscode.Disposable {
             if (this.getLastForegroundSessionId() === session.sessionId) {
                 await this.activateConsoleSession(session, 'foreground session is ready');
             } else {
-                await this.ensureDapStarted(session);
+                this.scheduleDap(session, false);
             }
         }
     }
@@ -183,7 +189,10 @@ export class PythonForegroundSessionManager implements vscode.Disposable {
             return;
         }
 
-        if (this.getLastForegroundSessionId() === session.sessionId) {
+        if (
+            this.getLastForegroundSessionId() === session.sessionId &&
+            this._activeConsoleSessionId === session.sessionId
+        ) {
             return;
         }
 
@@ -201,6 +210,9 @@ export class PythonForegroundSessionManager implements vscode.Disposable {
         );
 
         await this.activateSession(session, reason);
+        if (this.canActivateServices(session.state)) {
+            this._activeConsoleSessionId = session.sessionId;
+        }
     }
 
     private async activateSession(session: ILanguageRuntimeSession, reason: string): Promise<void> {
@@ -213,23 +225,56 @@ export class PythonForegroundSessionManager implements vscode.Disposable {
             return;
         }
 
-        const connectDap =
-            session.metadata.sessionMode === 'console' && (await this.ensureDapStarted(session))
-                ? this.connectDap(session)
-                : Promise.resolve();
         this.logSession(session, `Activating LSP. Reason: ${reason}`, vscode.LogLevel.Debug);
-        await Promise.all([session.activateLsp(), connectDap]);
+        await session.activateLsp();
+        if (session.metadata.sessionMode === 'console') {
+            this.scheduleDap(session, true);
+        }
     }
 
     private async deactivateSession(session: ILanguageRuntimeSession, reason: string): Promise<void> {
         this.logSession(session, `Deactivating LSP. Reason: ${reason}`, vscode.LogLevel.Debug);
-        const dapState = this._dapSessionStates.get(session.sessionId);
-        await Promise.all([
-            session.deactivateLsp(),
-            session.metadata.sessionMode === 'console' && dapState?.started
-                ? session.disconnectDap()
-                : Promise.resolve(),
-        ]);
+        await session.deactivateLsp();
+        if (this._activeConsoleSessionId === session.sessionId) {
+            this._activeConsoleSessionId = undefined;
+        }
+        if (session.metadata.sessionMode === 'console') {
+            this.enqueueDap(session, async () => {
+                if (this._dapSessionStates.get(session.sessionId)?.started) {
+                    await session.disconnectDap();
+                }
+            });
+        }
+    }
+
+    private scheduleDap(session: ILanguageRuntimeSession, connect: boolean): void {
+        this.enqueueDap(session, async () => {
+            if (!this.canActivateServices(session.state) || !(await this.ensureDapStarted(session))) {
+                return;
+            }
+            if (connect && !this._disposed && this._activeConsoleSessionId === session.sessionId) {
+                await this.connectDap(session);
+            }
+        });
+    }
+
+    private enqueueDap(session: ILanguageRuntimeSession, task: () => Promise<void>): void {
+        const previous = this._dapQueues.get(session.sessionId) ?? Promise.resolve();
+        const run = previous
+            .then(async () => {
+                if (!this._disposed) {
+                    await task();
+                }
+            })
+            .catch((error) => {
+                this.logSession(session, `DAP operation failed: ${this.formatError(error)}`, vscode.LogLevel.Warning);
+            });
+        this._dapQueues.set(session.sessionId, run);
+        void run.then(() => {
+            if (this._dapQueues.get(session.sessionId) === run) {
+                this._dapQueues.delete(session.sessionId);
+            }
+        });
     }
 
     private async ensureDapStarted(session: ILanguageRuntimeSession): Promise<boolean> {
@@ -330,12 +375,16 @@ export class PythonForegroundSessionManager implements vscode.Disposable {
     }
 
     private enqueueActivation(task: () => Promise<void>): Promise<void> {
-        const run = this._activationQueue.then(task, task);
+        const run = this._activationQueue.then(async () => {
+            if (!this._disposed) {
+                await task();
+            }
+        });
         this._activationQueue = run.catch((error) => {
             const message = error instanceof Error ? error.message : String(error);
             this._logChannel.error(`[Python Supervisor] Foreground session manager failed: ${message}`);
         });
-        return run;
+        return this._activationQueue;
     }
 
     private logSession(

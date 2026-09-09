@@ -84,6 +84,89 @@ suite('Python Supervisor - Foreground Session Manager', () => {
         sinon.restore();
     });
 
+    function createManager(runtimeSessionService: ReturnType<typeof createRuntimeSessionService>) {
+        return new PythonForegroundSessionManager(
+            createContext(),
+            runtimeSessionService as any,
+            new PythonSessionRegistry(),
+            { updatePythonPath: sinon.stub().resolves() } as unknown as IPythonPathUpdaterServiceManager,
+            { getActiveWorkspaceUri: () => undefined } as unknown as IInterpreterHelper,
+            { getActiveInterpreter: sinon.stub().resolves(undefined) } as unknown as IInterpreterService,
+            new MockOutputChannel('python-supervisor'),
+        );
+    }
+
+    for (const operation of ['startDap', 'connectDap', 'disconnectDap'] as const) {
+        test(`switches LSP ownership while ${operation} is pending`, async () => {
+            const first = createSession('first', 'console');
+            const second = createSession('second', 'console');
+            let finish!: (value: any) => void;
+            first[operation].returns(
+                new Promise((resolve) => {
+                    finish = resolve;
+                }),
+            );
+            const service = createRuntimeSessionService();
+            const manager = createManager(service);
+            service.emitCreateSession(first);
+            service.emitCreateSession(second);
+            service.emitForegroundSession(first);
+            await flushQueue();
+            sinon.assert.calledOnce(first.activateLsp);
+
+            service.emitForegroundSession(second);
+            await flushQueue();
+            sinon.assert.calledOnce(first.deactivateLsp);
+            sinon.assert.calledOnce(second.activateLsp);
+            sinon.assert.callOrder(first.deactivateLsp, second.activateLsp);
+
+            finish(true);
+            await flushQueue();
+            if (operation === 'startDap') {
+                sinon.assert.notCalled(first.connectDap);
+            }
+            manager.dispose();
+        });
+    }
+
+    test('retries the same foreground session after LSP activation fails', async () => {
+        const session = createSession('retry', 'console');
+        session.activateLsp.onFirstCall().rejects(new Error('initialization failed'));
+        const service = createRuntimeSessionService();
+        const manager = createManager(service);
+        service.emitCreateSession(session);
+        service.emitForegroundSession(session);
+        await flushQueue();
+        service.emitForegroundSession(session);
+        await flushQueue();
+        sinon.assert.calledTwice(session.activateLsp);
+        manager.dispose();
+    });
+
+    test('waits for a slow LSP to stop before activating the next console', async () => {
+        const first = createSession('first', 'console');
+        const second = createSession('second', 'console');
+        const service = createRuntimeSessionService();
+        const manager = createManager(service);
+        service.emitCreateSession(first);
+        service.emitCreateSession(second);
+        service.emitForegroundSession(first);
+        await flushQueue();
+        let finish!: () => void;
+        first.deactivateLsp.returns(
+            new Promise<void>((resolve) => {
+                finish = resolve;
+            }),
+        );
+        service.emitForegroundSession(second);
+        await flushQueue();
+        sinon.assert.notCalled(second.activateLsp);
+        finish();
+        await flushQueue();
+        sinon.assert.calledOnce(second.activateLsp);
+        manager.dispose();
+    });
+
     test('activates only the foreground console session services', async () => {
         const consoleA = createSession('console-a', 'console');
         const consoleB = createSession('console-b', 'console');
