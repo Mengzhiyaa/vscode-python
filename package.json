@@ -84,6 +84,7 @@
     ],
     "activationEvents": [
         "onStartupFinished",
+        "onSupervisorDataExplorerImport",
         "onDebugInitialConfigurations",
         "onLanguage:python",
         "onDebugResolve:python",

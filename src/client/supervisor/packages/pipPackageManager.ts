@@ -7,9 +7,11 @@ import { IFileSystem } from '../../common/platform/types';
 import { IPythonExecutionFactory, IPythonExecutionService } from '../../common/process/types';
 import { ITerminalServiceFactory } from '../../common/terminal/types';
 import { IServiceContainer } from '../../ioc/types';
-import type { LanguageRuntimePackage, PackageSpec } from '../types/supervisor-api';
+import type { LanguageRuntimePackage, PackageSpec, PackageRepositoryRequest, PackageRepositoryResponse } from '../types/supervisor-api';
 import { KernelPackageRpc } from './kernelPackageRpc';
 import { fetchMetadataWithOutdated } from './packageMetadata';
+import { PIP_INDEX_ENV_VARS, resolvePythonIndexUrl } from './packageIndex';
+import { requestPackageRepository } from './packageRepositoryRequest';
 import { searchPyPI, searchPyPIVersions } from './pypiSearch';
 import { buildRequirementsFile } from './requirementsFile';
 import type { IPackageManager, PackageSession } from './types';
@@ -35,6 +37,27 @@ export class PipPackageManager implements IPackageManager {
 
     getPackages(token?: vscode.CancellationToken): Promise<LanguageRuntimePackage[]> {
         return this._kernelRpc.call<LanguageRuntimePackage[]>('getPackagesInstalled', token);
+    }
+
+    getPackageDetail(name: string, token?: vscode.CancellationToken): Promise<Partial<LanguageRuntimePackage> | undefined> {
+        return this._kernelRpc.getPackageDetail(name, token);
+    }
+
+    async packageRepositoryUrl(token?: vscode.CancellationToken): Promise<string | undefined> {
+        this._throwIfCancelled(token);
+        const url = await resolvePythonIndexUrl(PIP_INDEX_ENV_VARS, async () => {
+            if (!(await this.isPipAvailable())) { return undefined; }
+            const result = await (await this._getPythonService()).execModule(
+                'pip', ['config', 'get', 'global.index-url', '--no-color'], { token, throwOnStdErr: false },
+            );
+            return result.stdout.trim() || undefined;
+        });
+        this._throwIfCancelled(token);
+        return url;
+    }
+
+    repositoryRequest(request: PackageRepositoryRequest, token?: vscode.CancellationToken): Promise<PackageRepositoryResponse> {
+        return requestPackageRepository(request, token);
     }
 
     getPackageMetadata(

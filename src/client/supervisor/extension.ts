@@ -8,6 +8,7 @@ import { registerApkDebugAdapterFactory } from './apkDebugger';
 import { registerSupervisorEnvironmentContributions } from './environmentContributions';
 import { PythonLanguageContribution } from './pythonLanguageContribution';
 import { disposePythonLspOutputChannel } from './pythonLsp';
+import { registerPandasDataImporter } from './dataImport/pandasImporter';
 import type {
     ILanguageRegistrationHandle,
     ILanguageContributionServices,
@@ -124,6 +125,9 @@ export async function activateSupervisor(
             context.subscriptions.push(notebookController);
         }
         context.subscriptions.push(registerSupervisorEnvironmentContributions(context, api));
+        if (typeof api.registerDataImporter === 'function') {
+            context.subscriptions.push(registerPandasDataImporter(api));
+        }
         registered = true;
         registrationHandle = handle;
         context.subscriptions.push(

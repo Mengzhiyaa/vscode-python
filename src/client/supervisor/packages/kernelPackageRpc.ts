@@ -3,10 +3,24 @@
 
 import * as vscode from 'vscode';
 import type { PackageSession } from './types';
+import type { LanguageRuntimePackage } from '../types/supervisor-api';
 
 /** Calls package RPC methods on the APK session and owns cancellation cleanup. */
 export class KernelPackageRpc {
     constructor(private readonly _session: PackageSession, private readonly _logChannel: vscode.LogOutputChannel) {}
+
+    async getPackageDetail(name: string, token?: vscode.CancellationToken): Promise<Partial<LanguageRuntimePackage> | undefined> {
+        if (token?.isCancellationRequested) { throw new vscode.CancellationError(); }
+        if (!name.trim()) { return undefined; }
+        const detail = await this.call<(Partial<LanguageRuntimePackage> & { sourceRepository?: string }) | null>(
+            'getPackageDetail', token, name,
+        );
+        if (!detail) { return undefined; }
+        return {
+            ...detail,
+            ...(detail.sourceRepository && !detail.source ? { source: detail.sourceRepository } : {}),
+        };
+    }
 
     async call<T>(method: string, token?: vscode.CancellationToken, ...args: unknown[]): Promise<T> {
         if (token?.isCancellationRequested) {

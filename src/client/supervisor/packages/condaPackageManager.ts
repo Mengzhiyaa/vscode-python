@@ -58,6 +58,10 @@ export class CondaPackageManager implements IPackageManager {
         return this._kernelRpc.call<LanguageRuntimePackage[]>('getPackagesInstalled', token);
     }
 
+    getPackageDetail(name: string, token?: vscode.CancellationToken): Promise<Partial<LanguageRuntimePackage> | undefined> {
+        return this._kernelRpc.getPackageDetail(name, token);
+    }
+
     async isCondaAvailable(): Promise<boolean> {
         try {
             return await this._serviceContainer.get<ICondaService>(ICondaService).isCondaAvailable();
