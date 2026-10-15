@@ -266,6 +266,10 @@ export interface ILanguageLspStateChangeEvent {
 }
 export interface ILanguageLsp extends vscode.Disposable {
     readonly state: LanguageLspState;
+    /** Optional per-runtime Console configuration; overrides the factory default. */
+    readonly consoleLspConfiguration?: ILanguageConsoleLspConfiguration;
+    /** Standard LSP access through this session's already initialized Host client. */
+    readonly consoleLspBridge?: ILanguageConsoleLspBridge;
     readonly onDidChangeState?: vscode.Event<ILanguageLspStateChangeEvent>;
     readonly statementRangeProvider?: ILanguageStatementRangeProvider;
     readonly inputBoundaryProvider?: ILanguageInputBoundaryProvider;
@@ -274,21 +278,43 @@ export interface ILanguageLsp extends vscode.Disposable {
     deactivate(): Promise<void>;
     wait(): Promise<boolean>;
     showOutput(): void;
-    requestCompletion(code: string, position: {
-        line: number;
-        character: number;
-    }): Promise<any[]>;
-    requestHover(code: string, position: {
-        line: number;
-        character: number;
-    }): Promise<any | null>;
-    requestSignatureHelp(code: string, position: {
-        line: number;
-        character: number;
-    }): Promise<any | null>;
+}
+export interface ILanguageConsoleLspNotification {
+    readonly method: string;
+    readonly params?: unknown;
+}
+export interface ILanguageConsoleLspRegistration {
+    readonly id: string;
+    readonly method: string;
+    readonly registerOptions?: Readonly<Record<string, unknown>>;
+}
+/** The Host owns the physical connection, initialization, configuration and shutdown. */
+export interface ILanguageConsoleLspBridge {
+    readonly capabilities: Readonly<Record<string, unknown>> | undefined;
+    readonly registrations: readonly ILanguageConsoleLspRegistration[];
+    readonly onDidReceiveNotification: vscode.Event<ILanguageConsoleLspNotification>;
+    sendRequest(method: string, params: unknown, token: vscode.CancellationToken): Promise<unknown>;
+    sendNotification(method: string, params: unknown): Promise<void>;
+    registerRequestHandler(method: string, handler: (params: unknown, token: vscode.CancellationToken) => Promise<unknown>): vscode.Disposable;
+}
+/** Opt-in Console configuration for a bridge to the session's Host client. */
+export interface ILanguageConsoleLspConfiguration {
+    readonly rootUri?: string;
+    readonly workspaceFolders?: readonly {
+        readonly uri: string;
+        readonly name: string;
+    }[];
+    readonly initializationOptions?: unknown;
+    readonly settings?: Readonly<Record<string, unknown>>;
+    /** Vetted server commands; never interpreted as VS Code commands. */
+    readonly allowedCommands?: readonly string[];
+    /** Use runtime completion when the Console server returns no suggestions. Defaults to true. */
+    readonly kernelCompletionFallback?: boolean;
 }
 export interface ILanguageLspFactory {
     readonly languageId: string;
+    /** Enables the session-isolated Webview client without replacing the Host client. */
+    readonly consoleLsp?: ILanguageConsoleLspConfiguration;
     create(runtimeMetadata: LanguageRuntimeMetadata, sessionMetadata: IRuntimeSessionMetadata, dynState: LanguageRuntimeDynState, logChannel: vscode.LogOutputChannel): ILanguageLsp;
 }
 export type LanguageSessionMode = 'console' | 'notebook' | 'background';

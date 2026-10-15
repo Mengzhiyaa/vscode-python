@@ -7,13 +7,15 @@ import {
     LanguageClientOptions,
     RevealOutputChannelOn,
     State,
-    StreamInfo,
+    MessageTransports,
 } from 'vscode-languageclient/node';
 import { PYTHON_LANGUAGE } from '../common/constants';
 import { PythonHelpTopicProvider } from './pythonHelpTopicProvider';
 import { PythonStatementRangeProvider } from './pythonStatementRangeProvider';
+import { HostConsoleLspBridge } from './consoleLsp';
 import type {
     ILanguageLsp,
+    ILanguageConsoleLspConfiguration,
     ILanguageLspFactory,
     ILanguageLspStateChangeEvent,
     IRuntimeSessionMetadata,
@@ -87,6 +89,7 @@ export function disposePythonLspOutputChannel(): void {
 
 export class PythonLanguageLsp implements ILanguageLsp {
     private client?: LanguageClient;
+    readonly consoleLspBridge = new HostConsoleLspBridge(() => this.client);
     private _state: LanguageLspState = LANGUAGE_LSP_STATE.Uninitialized;
     private _stateEmitter = new vscode.EventEmitter<ILanguageLspStateChangeEvent>();
     private _initializing?: Promise<void>;
@@ -111,6 +114,39 @@ export class PythonLanguageLsp implements ILanguageLsp {
         return this._state;
     }
 
+    get consoleLspConfiguration(): ILanguageConsoleLspConfiguration | undefined {
+        if (this._metadata.sessionMode !== 'console') {
+            return undefined;
+        }
+
+        const workingDirectory = this._dynState.currentWorkingDirectory ?? this._metadata.workingDirectory;
+        const folder = workingDirectory
+            ? vscode.workspace.getWorkspaceFolder(vscode.Uri.file(workingDirectory))
+            : undefined;
+        const root = folder ?? vscode.workspace.workspaceFolders?.[0];
+        const configuration = vscode.workspace.getConfiguration(undefined, root?.uri);
+        // APK requests the section selected by its compiled analysis backend.
+        const settings = {
+            ty: configuration.get<Record<string, unknown>>('ty', {}),
+            pyrefly: configuration.get<Record<string, unknown>>('pyrefly', {}),
+        };
+        const folders = vscode.workspace.workspaceFolders ?? [];
+
+        return {
+            rootUri: root?.uri.toString(),
+            workspaceFolders: (root ? [root, ...folders.filter(folder => folder !== root)] : folders).map(folder => ({
+                uri: folder.uri.toString(), name: folder.name,
+            })),
+            initializationOptions: {
+                ...settings,
+                positron: { working_directory: workingDirectory },
+            },
+            settings,
+            allowedCommands: [],
+            kernelCompletionFallback: true,
+        };
+    }
+
     get statementRangeProvider(): PythonStatementRangeProvider | undefined {
         return this._statementRangeProvider;
     }
@@ -123,11 +159,12 @@ export class PythonLanguageLsp implements ILanguageLsp {
         this.activationDisposables.forEach((disposable) => disposable.dispose());
         this.activationDisposables = [];
 
-        const serverOptions = async (): Promise<StreamInfo> => {
-            const out = new PromiseHandles<StreamInfo>();
+        const consoleBridge = this.consoleLspBridge;
+        const serverOptions = async (): Promise<MessageTransports> => {
+            const out = new PromiseHandles<MessageTransports>();
             const socket = new Socket();
             socket.on('ready', () => {
-                out.resolve({ reader: socket, writer: socket });
+                out.resolve(consoleBridge.createTransports(socket));
             });
             socket.on('error', (error) => {
                 out.reject(error);
@@ -140,6 +177,14 @@ export class PythonLanguageLsp implements ILanguageLsp {
             documentSelector: getDocumentSelectorForSession(this._metadata.notebookUri),
             outputChannel: getLspOutputChannel(),
             revealOutputChannelOn: RevealOutputChannelOn.Never,
+            initializationOptions: this.consoleLspConfiguration?.initializationOptions,
+            synchronize: { configurationSection: ['ty', 'pyrefly'] },
+            middleware: {
+                ...consoleBridge.middleware,
+                handleDiagnostics(uri, diagnostics, next) {
+                    if (!(uri.scheme === 'inmemory' && uri.authority === 'console')) { next(uri, diagnostics); }
+                },
+            },
         };
 
         const clientId = 'positron.python';
@@ -254,77 +299,10 @@ export class PythonLanguageLsp implements ILanguageLsp {
         getLspOutputChannel().show();
     }
 
-    async requestCompletion(code: string, position: { line: number; character: number }): Promise<any[]> {
-        // Console completion is an explicit user invocation (Tab / trigger
-        // suggest), matching the context sent by Positron's editor client.
-        const result = await this.requestForVirtualDocument<any>('textDocument/completion', code, position, {
-            triggerKind: 1,
-        });
-        if (Array.isArray(result)) {
-            return result;
-        }
-
-        if (result && typeof result === 'object' && 'items' in result) {
-            return (result as any).items || [];
-        }
-
-        return [];
-    }
-
-    async requestHover(code: string, position: { line: number; character: number }): Promise<any | null> {
-        return this.requestForVirtualDocument('textDocument/hover', code, position);
-    }
-
-    async requestSignatureHelp(code: string, position: { line: number; character: number }): Promise<any | null> {
-        return this.requestForVirtualDocument('textDocument/signatureHelp', code, position);
-    }
-
     async dispose(): Promise<void> {
         this.activationDisposables.forEach((disposable) => disposable.dispose());
         await this.deactivate();
-    }
-
-    private async requestForVirtualDocument<T>(
-        method: string,
-        code: string,
-        position: { line: number; character: number },
-        completionContext?: { triggerKind: number },
-    ): Promise<T | null> {
-        if (!this.client || this._state !== LANGUAGE_LSP_STATE.Running) {
-            this.log(`LSP not ready for ${method} request`, vscode.LogLevel.Debug);
-            return null;
-        }
-
-        const uri = this.createRequestTextDocumentUri();
-        const textDocument = {
-            uri,
-            languageId: PYTHON_LANGUAGE,
-            version: 1,
-            text: code,
-        };
-
-        this.client.sendNotification('textDocument/didOpen', { textDocument });
-        try {
-            return await this.client.sendRequest(method, {
-                textDocument: { uri },
-                position,
-                ...(completionContext ? { context: completionContext } : {}),
-            });
-        } catch (error) {
-            this.log(`${method} request failed: ${error}`, vscode.LogLevel.Error);
-            return null;
-        } finally {
-            this.client.sendNotification('textDocument/didClose', {
-                textDocument: { uri },
-            });
-        }
-    }
-
-    private createRequestTextDocumentUri(): string {
-        const requestPath = this._metadata.notebookUri
-            ? `/notebook-repl-python-${this._metadata.sessionId}/input-${Date.now()}.py`
-            : `/console/input-${Date.now()}.py`;
-        return vscode.Uri.from({ scheme: 'inmemory', path: requestPath }).toString();
+        this.consoleLspBridge.dispose();
     }
 
     private registerPositronLspExtensions(client: LanguageClient): void {
