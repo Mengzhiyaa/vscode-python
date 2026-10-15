@@ -111,6 +111,30 @@ The extension is available in multiple languages: `de`, `en`, `es`, `fa`, `fr`, 
 - The CI prerelease is recreated from the fixed `ci-latest` tag on each `main` push so it stays at the top of the Releases page and always carries the newest CI VSIX files.
 - `.github/workflows/release.yml` still handles tagged release packaging and release publication.
 
+### Upgrading the APK Python kernel
+
+Using the Node.js version in `.nvmrc`, run:
+
+```sh
+npm run update:apk
+npm run install:apk -- --retry 3
+```
+
+`update:apk` reads the [latest stable apk-build release](https://github.com/Mengzhiyaa/apk-build/releases/latest) and updates `positron.binaryDependencies.apk` and all existing platforms in `positron.binaryChecksums.apk` in `package.json`. It uses each ZIP archive's SHA-256 `digest` from GitHub, validates every required asset before writing, and leaves the file untouched if the request or validation fails. macOS installation uses `darwin-universal`. Optional `GITHUB_TOKEN` or `GH_TOKEN` authentication is supported for API rate limits.
+
+```sh
+# Preview the version and checksums without writing:
+npm run update:apk -- --dry-run
+# Pin a specific stable release:
+npm run update:apk -- --version 0.1.2
+```
+
+The updater changes the package manifest; `install:apk` downloads the host binary, verifies its archive checksum and executable version, then writes `resources/apk/manifest.json`. Do not edit this generated manifest by hand. For a different build target, pass `--platform`, for example `npm run install:apk -- --platform win32-x64 --retry 3`.
+
+Run `npm run package` when a new VSIX is needed; it installs APK and verifies the packaged binary automatically. CI also reads the version and checksums from `package.json`, so its workflows need no version change. `package-lock.json` needs no change for this binary dependency.
+
+Reload the VS Code window and start a new Supervisor session to use the updated kernel. If `python.supervisor.apkPath` or `VSCODE_PYTHON_SUPERVISOR_APK_PATH` is set, update or clear that override because it takes precedence over the bundled binary.
+
 ## Questions, issues, feature requests, and contributions
 
 -   If you have a question about how to accomplish something with the extension, please [ask on our Discussions page](https://github.com/microsoft/vscode-python/discussions/categories/q-a).

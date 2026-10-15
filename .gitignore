@@ -43,6 +43,8 @@ pydevd*.log
 nodeLanguageServer/**
 nodeLanguageServer.*/**
 dist/**
+# APK binaries and manifest downloaded by npm run install:apk
+/resources/apk/
 # translation files
 *.xlf
 package.nls.*.json

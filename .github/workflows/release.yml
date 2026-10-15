@@ -45,7 +45,8 @@ jobs:
           - runner: ubuntu-latest
             target: linux-x64
             cargo_target: x86_64-unknown-linux-musl
-          - runner: ubuntu-latest
+          # Build ARM64 natively so Cargo uses an AArch64 linker and system libraries.
+          - runner: ubuntu-24.04-arm
             target: linux-arm64
             cargo_target: aarch64-unknown-linux-gnu
           - runner: macos-15
@@ -108,72 +109,72 @@ jobs:
           files: artifacts/**/*.vsix
           generate_release_notes: true
 
-  publish-marketplace:
-    needs:
-      - package
-      - release
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    env:
-      VSCE_PAT: ${{ secrets.VSCE_PAT }}
+  # publish-marketplace:
+  #   needs:
+  #     - package
+  #     - release
+  #   runs-on: ubuntu-latest
+  #   permissions:
+  #     contents: read
+  #   env:
+  #     VSCE_PAT: ${{ secrets.VSCE_PAT }}
 
-    steps:
-      - name: Download packaged artifacts
-        if: env.VSCE_PAT != ''
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
+  #   steps:
+  #     - name: Download packaged artifacts
+  #       if: env.VSCE_PAT != ''
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         path: artifacts
 
-      - name: Setup Node.js
-        if: env.VSCE_PAT != ''
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
+  #     - name: Setup Node.js
+  #       if: env.VSCE_PAT != ''
+  #       uses: actions/setup-node@v4
+  #       with:
+  #         node-version: 22
 
-      - name: Publish to Visual Studio Marketplace
-        if: env.VSCE_PAT != ''
-        shell: bash
-        run: |
-          shopt -s globstar nullglob
-          files=(artifacts/**/*.vsix)
-          if [ "${#files[@]}" -eq 0 ]; then
-            echo "No VSIX artifacts found"
-            exit 1
-          fi
-          npx @vscode/vsce publish --skip-duplicate --packagePath "${files[@]}" --pat "${VSCE_PAT}"
+  #     - name: Publish to Visual Studio Marketplace
+  #       if: env.VSCE_PAT != ''
+  #       shell: bash
+  #       run: |
+  #         shopt -s globstar nullglob
+  #         files=(artifacts/**/*.vsix)
+  #         if [ "${#files[@]}" -eq 0 ]; then
+  #           echo "No VSIX artifacts found"
+  #           exit 1
+  #         fi
+  #         npx @vscode/vsce publish --skip-duplicate --packagePath "${files[@]}" --pat "${VSCE_PAT}"
 
-  publish-openvsx:
-    needs:
-      - package
-      - release
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    env:
-      OVSX_PAT: ${{ secrets.OVSX_PAT }}
+  # publish-openvsx:
+  #   needs:
+  #     - package
+  #     - release
+  #   runs-on: ubuntu-latest
+  #   permissions:
+  #     contents: read
+  #   env:
+  #     OVSX_PAT: ${{ secrets.OVSX_PAT }}
 
-    steps:
-      - name: Download packaged artifacts
-        if: env.OVSX_PAT != ''
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
+  #   steps:
+  #     - name: Download packaged artifacts
+  #       if: env.OVSX_PAT != ''
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         path: artifacts
 
-      - name: Setup Node.js
-        if: env.OVSX_PAT != ''
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
+  #     - name: Setup Node.js
+  #       if: env.OVSX_PAT != ''
+  #       uses: actions/setup-node@v4
+  #       with:
+  #         node-version: 22
 
-      - name: Publish to Open VSX
-        if: env.OVSX_PAT != ''
-        shell: bash
-        run: |
-          shopt -s globstar nullglob
-          files=(artifacts/**/*.vsix)
-          if [ "${#files[@]}" -eq 0 ]; then
-            echo "No VSIX artifacts found"
-            exit 1
-          fi
-          npx ovsx -p "${OVSX_PAT}" publish --skip-duplicate --packagePath "${files[@]}"
+  #     - name: Publish to Open VSX
+  #       if: env.OVSX_PAT != ''
+  #       shell: bash
+  #       run: |
+  #         shopt -s globstar nullglob
+  #         files=(artifacts/**/*.vsix)
+  #         if [ "${#files[@]}" -eq 0 ]; then
+  #           echo "No VSIX artifacts found"
+  #           exit 1
+  #         fi
+  #         npx ovsx -p "${OVSX_PAT}" publish --skip-duplicate --packagePath "${files[@]}"

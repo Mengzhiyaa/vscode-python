@@ -8,17 +8,17 @@
     },
     "positron": {
         "binaryDependencies": {
-            "apk": "0.1.1"
+            "apk": "0.1.2"
         },
         "binaryChecksums": {
             "apk": {
-                "darwin-arm64": "sha256:9dda5fef844bd9cd4b03dc606ee0662289d004f809f4f13d0c909b2a2f19649e",
-                "darwin-universal": "sha256:f29618f291e43e453812e436f342153336c6997851e38f4866da0595712359b2",
-                "darwin-x64": "sha256:8ef8dd6cfb65f24ed1f815581ff6f966c95d486e4a3bddcc93b0eed0acabd0b6",
-                "linux-arm64": "sha256:c6a50ce2988f2258d76b315d2f2e131a2f226f2eaf03ada103de899e51af8241",
-                "linux-x64": "sha256:a60906a7eb73c9ea30a008dacf17bef29be941d836ecb78d3c5eff75c9bf7330",
-                "windows-arm64": "sha256:5c663ef3c73809219e237a64aa9ccb0a41351fae26a0cd6ee408984b387db4e5",
-                "windows-x64": "sha256:b3467cefe50a7fc3746a547898c4874462140c9e72aa4a5ca58ef0febf4213c8"
+                "darwin-arm64": "sha256:202689bfc3042e8bb1a76fcefefda5d3a5d94c9f157afbe504f8ece6ca82f8b1",
+                "darwin-universal": "sha256:475a8c772c0356487363288d816e96e0a686c0fbaed9812abfb328f3fc7577e0",
+                "darwin-x64": "sha256:e7784dbba60e57832b2e722ab4891c345588f80783adf3882a7f6cd8ac6c46aa",
+                "linux-arm64": "sha256:a51683fab4c83c6d558629dc7fc088fa834ac8ec98fc4231c354595c270e8ffe",
+                "linux-x64": "sha256:e78c8b30e9cda765c80e38438d0555b135fc9285e3199fe93d941fee48351702",
+                "windows-arm64": "sha256:276b5a4358ff60bb1cbc43c40b4cf0a07eedc536f87bfa5700c0bcb8f8fb02f1",
+                "windows-x64": "sha256:d1bf257f15055130f841300a666e2a4a6ddf88d81ba16c24df7d52ff21e97a0c"
             }
         }
     },
@@ -1875,6 +1875,7 @@
         "webpack": "webpack",
         "sync:supervisor-api": "node scripts/sync-supervisor-api.mjs",
         "verify:supervisor-api": "node scripts/sync-supervisor-api.mjs --check",
+        "update:apk": "node scripts/update-apk.mjs",
         "install:apk": "node scripts/install-apk.mjs",
         "verify:apk-vsix": "node scripts/verify-apk-vsix.mjs"
     },
