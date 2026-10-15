@@ -31,7 +31,7 @@ suite('Smoke Test: Jedi LSP', () => {
         }
         const textDocument = await openFile(file);
 
-        waitForCondition(
+        await waitForCondition(
             async () => {
                 const diagnostics = vscode.languages.getDiagnostics(textDocument.uri);
                 return diagnostics && diagnostics.length >= 1;
@@ -39,5 +39,5 @@ suite('Smoke Test: Jedi LSP', () => {
             60_000,
             `No diagnostics found in file with invalid syntax`,
         );
-    });
+    }).timeout(70_000);
 });

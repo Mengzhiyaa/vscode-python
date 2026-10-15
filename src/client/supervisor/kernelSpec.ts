@@ -221,9 +221,11 @@ export function getApkEnvironmentVariables(installation: PythonRuntimeInstallati
         return env;
     }
 
-    const libraryPath = path.join(prefix, 'lib');
+    // Both dynamic-library variables above use POSIX paths and ':' separators,
+    // including when their platform branches are exercised on a Windows host.
+    const libraryPath = path.posix.join(prefix, 'lib');
     const inherited = process.env[variable];
-    env[variable] = inherited ? `${libraryPath}${path.delimiter}${inherited}` : libraryPath;
+    env[variable] = inherited ? `${libraryPath}:${inherited}` : libraryPath;
 
     return env;
 }

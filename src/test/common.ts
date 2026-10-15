@@ -433,22 +433,24 @@ export interface IExtensionTestApi extends PythonExtension, ProposedExtensionAPI
 
 export async function unzip(zipFile: string, targetFolder: string): Promise<void> {
     await fs.ensureDir(targetFolder);
-    return new Promise<void>((resolve, reject) => {
-        const zip = new StreamZip({
-            file: zipFile,
-            storeEntries: true,
-        });
-        zip.on('ready', async () => {
-            zip.extract('extension', targetFolder, (err: any) => {
-                if (err) {
-                    reject(err);
-                } else {
-                    resolve();
+    const zip = new StreamZip.async({ file: zipFile });
+    try {
+        await zip.extract('extension', targetFolder);
+        if (process.platform !== 'win32') {
+            // node-stream-zip writes files with the default mode, so restore
+            // executable permissions for packaged binaries such as APK and PET.
+            const entries = await zip.entries();
+            for (const name of Object.keys(entries)) {
+                const entry = entries[name];
+                const mode = (entry.attr >>> 16) & 0o777;
+                if (entry.isFile && name.startsWith('extension/') && (mode & 0o111) !== 0) {
+                    await fs.chmod(path.join(targetFolder, name.slice('extension/'.length)), mode);
                 }
-                zip.close();
-            });
-        });
-    });
+            }
+        }
+    } finally {
+        await zip.close();
+    }
 }
 /**
  * Wait for a condition to be fulfilled within a timeout.

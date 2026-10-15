@@ -56,7 +56,7 @@ runs:
 
     - name: Set CI_PYTHON_PATH and CI_DISABLE_AUTO_SELECTION
       run: |
-        echo "CI_PYTHON_PATH=python" >> $GITHUB_ENV
+        python -c "import sys; print('CI_PYTHON_PATH=' + sys.executable)" >> "$GITHUB_ENV"
         echo "CI_DISABLE_AUTO_SELECTION=1" >> $GITHUB_ENV
       shell: bash
 
@@ -68,3 +68,37 @@ runs:
       uses: GabrielBB/xvfb-action@b706e4e27b14669b486812790492dc50ca16b465 # v1.7
       with:
         run: node --no-force-async-hooks-checks ./out/test/smokeTest.js
+
+    - name: Collect Supervisor and kernel logs
+      if: ${{ failure() }}
+      shell: python
+      run: |
+        from pathlib import Path
+        import shutil
+        import tempfile
+
+        temp_dir = Path(tempfile.gettempdir())
+        destination = Path('tmp/smoke-test-logs')
+        destination.mkdir(parents=True, exist_ok=True)
+        vscode_logs = Path('.vscode-test/user-data/logs')
+        if vscode_logs.is_dir():
+            shutil.copytree(vscode_logs, destination / 'vscode', dirs_exist_ok=True)
+        for pattern in ('kallichore-*.log', 'kernel-*/*.log', 'kernel-*.log'):
+            for source in temp_dir.glob(pattern):
+                target = destination / source.relative_to(temp_dir)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                try:
+                    shutil.copy2(source, target)
+                except OSError as error:
+                    print(f'Unable to collect {source}: {error}')
+
+    - name: Upload smoke test failure logs
+      if: ${{ failure() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: smoke-test-logs-${{ runner.os }}-${{ runner.arch }}-${{ github.run_attempt }}
+        retention-days: 7
+        if-no-files-found: warn
+        path: |
+          tmp/smoke-test-logs/
+          test-report.xml

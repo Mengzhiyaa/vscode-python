@@ -223,6 +223,7 @@ class PythonSupervisorController implements vscode.Disposable {
                 const message = error instanceof Error ? error.message : String(error);
                 this._services.logChannel.error(`[Python Supervisor] Command '${command}' failed: ${message}`);
                 void vscode.window.showErrorMessage(`Python Supervisor command failed: ${message}`);
+                throw error;
             }
         });
     }
