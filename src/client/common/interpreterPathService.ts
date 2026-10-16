@@ -17,6 +17,7 @@ import {
     IInterpreterPathService,
     InspectInterpreterSettingType,
     InterpreterConfigurationScope,
+    InterpreterPathUpdateOptions,
     IPersistentState,
     IPersistentStateFactory,
     IPythonSettings,
@@ -43,6 +44,7 @@ export class InterpreterPathService implements IInterpreterPathService {
     }
     public _didChangeInterpreterEmitter = new EventEmitter<InterpreterConfigurationScope>();
     private fileSystemPaths: FileSystemPaths;
+    private lastGlobalDefaultInterpreterPath: string | undefined;
     constructor(
         @inject(IPersistentStateFactory) private readonly persistentStateFactory: IPersistentStateFactory,
         @inject(IWorkspaceService) private readonly workspaceService: IWorkspaceService,
@@ -51,17 +53,30 @@ export class InterpreterPathService implements IInterpreterPathService {
     ) {
         disposables.push(this.workspaceService.onDidChangeConfiguration(this.onDidChangeConfiguration.bind(this)));
         this.fileSystemPaths = FileSystemPaths.withDefaults();
+        this.lastGlobalDefaultInterpreterPath = this.readGlobalDefaultInterpreterPath();
     }
 
     public async onDidChangeConfiguration(event: ConfigurationChangeEvent) {
         if (event.affectsConfiguration(`python.${defaultInterpreterPathSetting}`)) {
-            this._didChangeInterpreterEmitter.fire({ uri: undefined, configTarget: ConfigurationTarget.Global });
+            const value = this.readGlobalDefaultInterpreterPath();
+            if (value !== this.lastGlobalDefaultInterpreterPath) {
+                const stored = this.persistentStateFactory.createGlobalPersistentState<string | undefined>(
+                    this.getGlobalSettingKey(), undefined,
+                );
+                if (stored.value !== undefined) { await stored.updateValue(undefined); }
+                if (stored.value === undefined) { this.lastGlobalDefaultInterpreterPath = value; }
+            }
+            this._didChangeInterpreterEmitter.fire({ uri: undefined, configTarget: ConfigurationTarget.Global,
+                startSession: true, source: 'config-change' });
             traceVerbose('Interpreter Path updated', `python.${defaultInterpreterPathSetting}`);
         }
     }
 
     public inspect(resource: Resource, useOldKey = false): InspectInterpreterSettingType {
         resource = PythonSettings.getSettingsUriAndTarget(resource, this.workspaceService).uri;
+        const internalGlobal = this.persistentStateFactory.createGlobalPersistentState<string | undefined>(
+            this.getGlobalSettingKey(useOldKey), undefined,
+        );
         let workspaceFolderSetting: IPersistentState<string | undefined> | undefined;
         let workspaceSetting: IPersistentState<string | undefined> | undefined;
         if (resource) {
@@ -77,7 +92,8 @@ export class InterpreterPathService implements IInterpreterPathService {
         const defaultInterpreterPath: InspectInterpreterSettingType =
             this.workspaceService.getConfiguration('python', resource)?.inspect<string>('defaultInterpreterPath') ?? {};
         return {
-            globalValue: defaultInterpreterPath.globalValue,
+            globalValue: internalGlobal.value && internalGlobal.value !== 'python'
+                ? internalGlobal.value : defaultInterpreterPath.globalValue,
             workspaceFolderValue:
                 !workspaceFolderSetting?.value || workspaceFolderSetting?.value === 'python'
                     ? defaultInterpreterPath.workspaceFolderValue
@@ -108,13 +124,18 @@ export class InterpreterPathService implements IInterpreterPathService {
         resource: Resource,
         configTarget: ConfigurationTarget,
         pythonPath: string | undefined,
+        options?: InterpreterPathUpdateOptions,
     ): Promise<void> {
         resource = PythonSettings.getSettingsUriAndTarget(resource, this.workspaceService).uri;
         if (configTarget === ConfigurationTarget.Global) {
-            const pythonConfig = this.workspaceService.getConfiguration('python');
-            const globalValue = pythonConfig.inspect<string>('defaultInterpreterPath')!.globalValue;
-            if (globalValue !== pythonPath) {
-                await pythonConfig.update('defaultInterpreterPath', pythonPath, true);
+            // Session synchronization is internal state, never a settings edit.
+            const stored = this.persistentStateFactory.createGlobalPersistentState<string | undefined>(
+                this.getGlobalSettingKey(), undefined,
+            );
+            if (stored.value !== pythonPath) {
+                await stored.updateValue(pythonPath);
+                this._didChangeInterpreterEmitter.fire({ uri: undefined, configTarget,
+                    startSession: options?.startSession ?? true, source: options?.source ?? 'interpreter-path-update' });
             }
             return;
         }
@@ -129,9 +150,19 @@ export class InterpreterPathService implements IInterpreterPathService {
         );
         if (persistentSetting.value !== pythonPath) {
             await persistentSetting.updateValue(pythonPath);
-            this._didChangeInterpreterEmitter.fire({ uri: resource, configTarget });
+            this._didChangeInterpreterEmitter.fire({ uri: resource, configTarget,
+                startSession: options?.startSession ?? true, source: options?.source ?? 'interpreter-path-update' });
             traceVerbose('Interpreter Path updated', settingKey, pythonPath);
         }
+    }
+
+    public getGlobalSettingKey(useOldKey = false): string {
+        const key = 'GLOBAL_INTERPRETER_PATH';
+        return !useOldKey && this.appEnvironment.remoteName ? `${this.appEnvironment.remoteName}_${key}` : key;
+    }
+
+    private readGlobalDefaultInterpreterPath(): string | undefined {
+        return this.workspaceService.getConfiguration('python')?.inspect<string>(defaultInterpreterPathSetting)?.globalValue;
     }
 
     public getSettingKey(
@@ -163,7 +194,7 @@ export class InterpreterPathService implements IInterpreterPathService {
         await Promise.all([
             this._copyWorkspaceFolderValueToNewStorage(resource, oldSettings.workspaceFolderValue),
             this._copyWorkspaceValueToNewStorage(resource, oldSettings.workspaceValue),
-            this._moveGlobalSettingValueToNewStorage(oldSettings.globalValue),
+            // The global setting remains a fallback; session synchronization owns internal state.
         ]);
     }
 
@@ -181,7 +212,7 @@ export class InterpreterPathService implements IInterpreterPathService {
         const flaggedWorkspaceFolderKeys = flaggedWorkspaceFolderKeysStorage.value;
         const shouldUpdateWorkspaceFolderSetting = !flaggedWorkspaceFolderKeys.includes(workspaceFolderKey);
         if (shouldUpdateWorkspaceFolderSetting) {
-            await this.update(resource, ConfigurationTarget.WorkspaceFolder, value);
+            await this.update(resource, ConfigurationTarget.WorkspaceFolder, value, { startSession: false, source: 'storage-migration' });
             await flaggedWorkspaceFolderKeysStorage.updateValue([workspaceFolderKey, ...flaggedWorkspaceFolderKeys]);
         }
     }
@@ -201,7 +232,7 @@ export class InterpreterPathService implements IInterpreterPathService {
         const flaggedWorkspaceKeys = flaggedWorkspaceKeysStorage.value;
         const shouldUpdateWorkspaceSetting = !flaggedWorkspaceKeys.includes(workspaceKey);
         if (shouldUpdateWorkspaceSetting) {
-            await this.update(resource, ConfigurationTarget.Workspace, value);
+            await this.update(resource, ConfigurationTarget.Workspace, value, { startSession: false, source: 'storage-migration' });
             await flaggedWorkspaceKeysStorage.updateValue([workspaceKey, ...flaggedWorkspaceKeys]);
         }
     }
@@ -214,7 +245,7 @@ export class InterpreterPathService implements IInterpreterPathService {
         );
         const shouldUpdateGlobalSetting = !isGlobalSettingCopiedStorage.value;
         if (shouldUpdateGlobalSetting) {
-            await this.update(undefined, ConfigurationTarget.Global, value);
+            await this.update(undefined, ConfigurationTarget.Global, value, { startSession: false, source: 'storage-migration' });
             await isGlobalSettingCopiedStorage.updateValue(true);
         }
     }

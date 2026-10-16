@@ -41,6 +41,7 @@ const convertedKinds = new Map(
         [PythonEnvKind.Hatch]: EnvironmentType.Hatch,
         [PythonEnvKind.Pixi]: EnvironmentType.Pixi,
         [PythonEnvKind.Venv]: EnvironmentType.Venv,
+        [PythonEnvKind.Uv]: EnvironmentType.Uv,
         [PythonEnvKind.VirtualEnvWrapper]: EnvironmentType.VirtualEnvWrapper,
         [PythonEnvKind.ActiveState]: EnvironmentType.ActiveState,
     }),

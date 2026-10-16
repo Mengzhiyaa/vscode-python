@@ -79,6 +79,12 @@ export interface GetActiveInterpreterOptions {
     exactResource?: boolean;
 }
 
+export interface InterpreterChangeEvent {
+    resource: Uri | undefined;
+    startSession: boolean;
+    source: string;
+}
+
 export interface IInterpreterService {
     triggerRefresh(query?: PythonLocatorQuery, options?: TriggerRefreshOptions): Promise<void>;
     readonly refreshPromise: Promise<void> | undefined;
@@ -86,6 +92,8 @@ export interface IInterpreterService {
     readonly onDidChangeInterpreters: Event<PythonEnvironmentsChangedEvent>;
     onDidChangeInterpreterConfiguration: Event<Uri | undefined>;
     onDidChangeInterpreter: Event<Uri | undefined>;
+    /** Classified counterpart; the legacy URI event remains available to other consumers. */
+    readonly onDidChangeInterpreterForSession?: Event<InterpreterChangeEvent>;
     onDidChangeInterpreterInformation: Event<PythonEnvironment>;
     /**
      * Note this API does not trigger the refresh but only works with the current refresh if any. Information

@@ -32,7 +32,10 @@ export class PythonPathUpdaterService implements IPythonPathUpdaterServiceManage
         const pythonPathUpdater = this.getPythonUpdaterService(configTarget, wkspace);
         let failed = false;
         try {
-            await pythonPathUpdater.updatePythonPath(pythonPath);
+            await pythonPathUpdater.updatePythonPath(pythonPath, {
+                startSession: trigger !== 'load',
+                source: `python-path-${trigger}`,
+            });
             if (trigger === 'ui') {
                 this.preferredEnvService.trackUserSelectedEnvironment(pythonPath, wkspace);
             }

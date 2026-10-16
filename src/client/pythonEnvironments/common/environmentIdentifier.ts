@@ -3,6 +3,7 @@
 
 import { traceWarn } from '../../logging';
 import { PythonEnvKind } from '../base/info';
+import { isUvEnvironment } from './environmentManagers/uv';
 import { getPrioritizedEnvKinds } from '../base/info/envKind';
 import { isCondaEnvironment } from './environmentManagers/conda';
 import { isGloballyInstalledEnv } from './environmentManagers/globalInstalledEnvs';
@@ -34,6 +35,7 @@ function getIdentifiers(): Map<PythonEnvKind, (path: string) => Promise<boolean>
     identifier.set(PythonEnvKind.Poetry, isPoetryEnvironment);
     identifier.set(PythonEnvKind.Pixi, isPixiEnvironment);
     identifier.set(PythonEnvKind.Venv, isVenvEnvironment);
+    identifier.set(PythonEnvKind.Uv, isUvEnvironment);
     identifier.set(PythonEnvKind.VirtualEnvWrapper, isVirtualEnvWrapperEnvironment);
     identifier.set(PythonEnvKind.VirtualEnv, isVirtualEnvEnvironment);
     identifier.set(PythonEnvKind.ActiveState, isActiveStateEnvironment);

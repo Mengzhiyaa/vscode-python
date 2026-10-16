@@ -22,6 +22,7 @@ export enum PythonEnvKind {
     OtherGlobal = 'global-other',
     // "virtual"
     Venv = 'virt-venv',
+    Uv = 'uv',
     VirtualEnv = 'virt-virtualenv',
     VirtualEnvWrapper = 'virt-virtualenvwrapper',
     Pipenv = 'virt-pipenv',
@@ -45,6 +46,7 @@ export interface EnvPathType {
 }
 
 export const virtualEnvKinds = [
+    PythonEnvKind.Uv,
     PythonEnvKind.Poetry,
     PythonEnvKind.Hatch,
     PythonEnvKind.Pixi,

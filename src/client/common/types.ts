@@ -331,7 +331,11 @@ export interface IExperimentService {
     getExperimentValue<T extends boolean | number | string>(experimentName: string): Promise<T | undefined>;
 }
 
-export type InterpreterConfigurationScope = { uri: Resource; configTarget: ConfigurationTarget };
+export interface InterpreterPathUpdateOptions {
+    startSession?: boolean;
+    source?: string;
+}
+export type InterpreterConfigurationScope = { uri: Resource; configTarget: ConfigurationTarget } & InterpreterPathUpdateOptions;
 export type InspectInterpreterSettingType = {
     globalValue?: string;
     workspaceValue?: string;
@@ -346,7 +350,7 @@ export interface IInterpreterPathService {
     onDidChange: Event<InterpreterConfigurationScope>;
     get(resource: Resource): string;
     inspect(resource: Resource): InspectInterpreterSettingType;
-    update(resource: Resource, configTarget: ConfigurationTarget, value: string | undefined): Promise<void>;
+    update(resource: Resource, configTarget: ConfigurationTarget, value: string | undefined, options?: InterpreterPathUpdateOptions): Promise<void>;
     copyOldInterpreterStorageValuesToNew(resource: Resource): Promise<void>;
 }
 

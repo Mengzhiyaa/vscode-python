@@ -75,6 +75,7 @@ export namespace EnvGroups {
     export const PipEnv = 'PipEnv';
     export const Pyenv = 'Pyenv';
     export const Venv = 'Venv';
+    export const Uv = 'uv';
     export const Poetry = 'Poetry';
     export const Hatch = 'Hatch';
     export const Pixi = 'Pixi';
@@ -696,11 +697,13 @@ function addSeparatorIfApplicable(
     return previousGroup;
 }
 
-function getGroup(item: IInterpreterQuickPickItem, workspacePath?: string) {
+function getGroup(item: IInterpreterQuickPickItem, workspacePath?: string): string {
     if (workspacePath && isParentPath(item.path, workspacePath)) {
         return EnvGroups.Workspace;
     }
     switch (item.interpreter.envType) {
+        case EnvironmentType.Uv:
+            return EnvGroups.Uv;
         case EnvironmentType.Global:
         case EnvironmentType.System:
         case EnvironmentType.Unknown:

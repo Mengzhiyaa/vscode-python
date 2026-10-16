@@ -96,6 +96,22 @@ suite('Python Supervisor - Foreground Session Manager', () => {
         );
     }
 
+    test('does not initialize another language console when restoring existing sessions', async () => {
+        const rSession = createSession('restored-r', 'console', { languageId: 'r' });
+        const pythonSession = createSession('restored-python', 'console');
+        const service = createRuntimeSessionService([rSession, pythonSession]);
+        const manager = createManager(service);
+        try {
+            await flushQueue();
+            sinon.assert.notCalled(rSession.startDap);
+            sinon.assert.notCalled(rSession.activateLsp);
+            sinon.assert.calledOnce(pythonSession.startDap);
+            sinon.assert.calledOnce(pythonSession.activateLsp);
+        } finally {
+            manager.dispose();
+        }
+    });
+
     for (const operation of ['startDap', 'connectDap', 'disconnectDap'] as const) {
         test(`switches LSP ownership while ${operation} is pending`, async () => {
             const first = createSession('first', 'console');

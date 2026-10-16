@@ -127,6 +127,9 @@ export class PythonRuntimeProvider implements ILanguageRuntimeProvider<PythonRun
     private _activeInterpreterPath: string | undefined;
     private readonly _onDidDiscoverInstallation = new vscode.EventEmitter<PythonRuntimeInstallation>();
     readonly onDidDiscoverInstallation = this._onDidDiscoverInstallation.event;
+    private readonly _onDidRemoveRuntime = new vscode.EventEmitter<{ runtimeId: string }>();
+    readonly onDidRemoveRuntime = this._onDidRemoveRuntime.event;
+    private readonly _runtimeIdsByPath = new Map<string, string>();
 
     constructor(
         private readonly _extensionContext: vscode.ExtensionContext,
@@ -135,6 +138,19 @@ export class PythonRuntimeProvider implements ILanguageRuntimeProvider<PythonRun
 
     reportDiscoveredInstallation(installation: PythonRuntimeInstallation): void {
         this._onDidDiscoverInstallation.fire(installation);
+    }
+
+    removeRuntimeForPath(pythonPath: string): void {
+        const key = this.runtimePathKey(pythonPath);
+        const runtimeId = this._runtimeIdsByPath.get(key);
+        if (!runtimeId) { return; }
+        this._runtimeIdsByPath.delete(key);
+        this._onDidRemoveRuntime.fire({ runtimeId });
+    }
+
+    private runtimePathKey(pythonPath: string): string {
+        const normalized = path.normalize(pythonPath);
+        return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
     }
 
     async *discoverInstallations(logChannel: vscode.LogOutputChannel): AsyncGenerator<PythonRuntimeInstallation> {
@@ -248,6 +264,7 @@ export class PythonRuntimeProvider implements ILanguageRuntimeProvider<PythonRun
         logChannel: vscode.LogOutputChannel,
     ): LanguageRuntimeMetadata {
         const runtimeShortName = this.getRuntimeShortName(installation);
+        this._runtimeIdsByPath.set(this.runtimePathKey(installation.pythonPath), this.createRuntimeId(installation));
         return {
             runtimeId: this.createRuntimeId(installation),
             extensionId: this.extensionId,
@@ -286,6 +303,11 @@ export class PythonRuntimeProvider implements ILanguageRuntimeProvider<PythonRun
 
     restoreInstallationFromMetadata(metadata: LanguageRuntimeMetadata): PythonRuntimeInstallation | undefined {
         const extraRuntimeData = metadata.extraRuntimeData as PythonRuntimeExtraData | undefined;
+        const pythonPath = extraRuntimeData?.installation?.pythonPath ?? metadata.runtimePath;
+        if (pythonPath) {
+            const key = this.runtimePathKey(pythonPath);
+            if (!this._runtimeIdsByPath.has(key)) { this._runtimeIdsByPath.set(key, metadata.runtimeId); }
+        }
         if (extraRuntimeData?.installation?.pythonPath) {
             return extraRuntimeData.installation;
         }

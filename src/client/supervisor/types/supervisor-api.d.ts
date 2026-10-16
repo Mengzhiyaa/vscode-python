@@ -579,6 +579,8 @@ export interface ILanguageRuntimeSession {
     listClients(type?: LanguageRuntimeClientType): Promise<Record<string, string>>;
     replyToPrompt(id: string, reply: string): Promise<void>;
     interrupt(): Promise<void>;
+    /** Fires with the execution ID when queued or submitted work is cancelled or rejected. */
+    readonly onDidCancelExecution?: vscode.Event<string>;
     setWorkingDirectory(workingDirectory: string): Promise<void>;
     restart(workingDirectory?: string): Promise<void>;
     shutdown(exitReason?: RuntimeExitReason): Promise<void>;
@@ -673,6 +675,7 @@ export interface PackageSpec {
     version?: string;
 }
 export interface ILanguageRuntimePackageManager {
+    dispose?(): void;
     packageRepositoryUrl?(token?: vscode.CancellationToken): Promise<string | undefined>;
     repositoryRequest?(request: PackageRepositoryRequest, token?: vscode.CancellationToken): Promise<PackageRepositoryResponse>;
     getPackageDetail?(name: string, token?: vscode.CancellationToken): Promise<Partial<LanguageRuntimePackage> | undefined>;
@@ -804,13 +807,19 @@ export interface IRuntimeSessionService {
     watchUiClient(sessionId: string, handler: (uiClient: IUiClientInstance) => vscode.Disposable | void): vscode.Disposable;
     selectInstallation<TInstallation = unknown>(languageId: string, options?: ILanguageInstallationPickerOptions): Promise<TInstallation | undefined>;
 }
+export interface ICodeExecutionObserver {
+    /** Called when the execution reaches Idle without a runtime error. */
+    onFinished?(): void;
+    /** Called for a runtime error, cancellation, or session termination. */
+    onFailed?(error: Error): void;
+}
 export interface IPositronConsoleService {
     readonly onDidChangeConsoleWidth: vscode.Event<number>;
     revealConsole(preserveFocus?: boolean): Promise<void>;
     focusConsole(): Promise<void>;
     showConsole(): Promise<void>;
     getConsoleWidth(): number;
-    executeCode(languageId: string, sessionId: string | undefined, code: string, attribution: ICodeExecutionAttribution, focus: boolean, allowIncomplete?: boolean, mode?: RuntimeCodeExecutionMode, errorBehavior?: RuntimeErrorBehavior, executionId?: string, documentUri?: vscode.Uri, executionMetadata?: Record<string, unknown>): Promise<string>;
+    executeCode(languageId: string, sessionId: string | undefined, code: string, attribution: ICodeExecutionAttribution, focus: boolean, allowIncomplete?: boolean, mode?: RuntimeCodeExecutionMode, errorBehavior?: RuntimeErrorBehavior, executionId?: string, documentUri?: vscode.Uri, executionMetadata?: Record<string, unknown>, observer?: ICodeExecutionObserver): Promise<string>;
 }
 export interface IPositronHelpService {
     showHelpTopic(languageId: string, topic: string): Promise<boolean>;

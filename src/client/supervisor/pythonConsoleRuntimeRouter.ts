@@ -91,6 +91,7 @@ export class PythonConsoleRuntimeRouter {
     async syncActiveInterpreter(
         source: string,
         workspaceUri?: vscode.Uri,
+        selectSession = true,
     ): Promise<LanguageRuntimeMetadata | undefined> {
         const installation = await this._runtimeProvider.resolveActiveInstallation(
             this._services.logChannel,
@@ -101,7 +102,7 @@ export class PythonConsoleRuntimeRouter {
         }
 
         const metadata = this.registerInstallation(installation);
-        await this.selectRuntimeForLiveConsole(metadata, source);
+        if (selectSession) { await this._services.runtimeSessionService.selectRuntime(metadata.runtimeId, source); }
         return metadata;
     }
 

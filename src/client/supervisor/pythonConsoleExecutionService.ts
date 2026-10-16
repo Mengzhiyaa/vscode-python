@@ -1,65 +1,74 @@
-import * as path from 'path';
+import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
-import { IConfigurationService } from '../common/types';
-import { IServiceContainer } from '../ioc/types';
-import { ICodeExecutionHelper } from '../terminals/types';
 import { PYTHON_LANGUAGE_ID } from './runtimeProvider';
 import { PythonConsoleRuntimeRouter } from './pythonConsoleRuntimeRouter';
 import type { IPositronConsoleService } from './types/supervisor-api';
+import { UnsavedScriptFiles } from './unsavedScriptFiles';
 
 const NO_RUNTIME_MESSAGE = 'No Python interpreter is available for the Supervisor console.';
 
-export class PythonConsoleExecutionService {
-    private readonly _codeExecutionHelper: ICodeExecutionHelper;
-    private readonly _configurationService: IConfigurationService;
-
+export class PythonConsoleExecutionService implements vscode.Disposable {
     constructor(
         private readonly _runtimeRouter: PythonConsoleRuntimeRouter,
-        serviceContainer: IServiceContainer,
         private readonly _positronConsoleService: IPositronConsoleService,
-    ) {
-        this._codeExecutionHelper = serviceContainer.get<ICodeExecutionHelper>(ICodeExecutionHelper);
-        this._configurationService = serviceContainer.get<IConfigurationService>(IConfigurationService);
-    }
+        private readonly _unsavedScripts = new UnsavedScriptFiles(),
+    ) {}
 
     async executeFile(source: string, resource?: vscode.Uri): Promise<void> {
-        let fileToExecute =
-            resource instanceof vscode.Uri ? resource : await this._codeExecutionHelper.getFileToExecute();
-        if (!fileToExecute) {
+        const document = resource
+            ? await vscode.workspace.openTextDocument(resource)
+            : vscode.window.activeTextEditor?.document;
+        if (!document) {
+            return;
+        }
+        if (!document.isUntitled && document.isDirty && !(await document.save())) {
             return;
         }
 
-        const fileAfterSave = await this._codeExecutionHelper.saveFileIfDirty(fileToExecute);
-        if (fileAfterSave instanceof vscode.Uri) {
-            fileToExecute = fileAfterSave;
-        }
+        let scratchFile: string | undefined;
+        let submitted = false;
+        try {
+            scratchFile = document.isUntitled ? await this._unsavedScripts.write(document) : undefined;
+            const fileToExecute = scratchFile ? vscode.Uri.file(scratchFile) : document.uri;
+            const liveSession = this._runtimeRouter.getLiveConsoleSession();
+            const target = liveSession
+                ? { sessionId: liveSession.sessionId, session: liveSession }
+                : await this._runtimeRouter.ensureConsoleSession(source, document.uri, false);
+            if (!target) {
+                void vscode.window.showWarningMessage(NO_RUNTIME_MESSAGE);
+                return;
+            }
 
-        const target = await this._runtimeRouter.ensureConsoleSession(source, fileToExecute, true);
-        if (!target) {
-            void vscode.window.showWarningMessage(NO_RUNTIME_MESSAGE);
-            return;
+            const executionId = scratchFile ? randomUUID() : undefined;
+            if (scratchFile && executionId) {
+                if (!target.session) {
+                    throw new Error('The Python console session is unavailable for unsaved script execution.');
+                }
+                this._unsavedScripts.watchExecution(scratchFile, target.session, executionId);
+            }
+            await this._positronConsoleService.executeCode(
+                PYTHON_LANGUAGE_ID,
+                target.sessionId || target.session?.sessionId,
+                this.createRunFileCode(fileToExecute),
+                { source, fileUri: document.uri, lineNumber: 1, metadata: { executionTarget: 'file' } },
+                false,
+                true,
+                undefined,
+                undefined,
+                executionId,
+                document.uri,
+                { executionTarget: 'file' },
+            );
+            submitted = true;
+        } finally {
+            if (scratchFile && !submitted) {
+                await this._unsavedScripts.finished(scratchFile);
+            }
         }
+    }
 
-        await this._positronConsoleService.executeCode(
-            PYTHON_LANGUAGE_ID,
-            target.sessionId || target.session?.sessionId,
-            this.createRunFileCode(fileToExecute),
-            {
-                source,
-                fileUri: fileToExecute,
-                lineNumber: 1,
-                metadata: {
-                    executionTarget: 'file',
-                },
-            },
-            true,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            fileToExecute,
-            { executionTarget: 'file' },
-        );
+    dispose(): void {
+        this._unsavedScripts.dispose();
     }
 
     async executeSelectionCommand(source: string, command: string, resource?: vscode.Uri): Promise<void> {
@@ -83,36 +92,12 @@ export class PythonConsoleExecutionService {
     }
 
     private createRunFileCode(file: vscode.Uri): string {
-        const filePath = file.fsPath;
-        const fileDirectory = path.dirname(filePath);
-        const executeInFileDir = this._configurationService.getSettings(file).terminal.executeInFileDir;
-
-        return [
-            'import os as __vsc_py_os',
-            'import runpy as __vsc_py_runpy',
-            'import sys as __vsc_py_sys',
-            `__vsc_py_file = ${JSON.stringify(filePath)}`,
-            `__vsc_py_file_dir = ${JSON.stringify(fileDirectory)}`,
-            `__vsc_py_chdir = ${executeInFileDir ? 'True' : 'False'}`,
-            '__vsc_py_prev_cwd = __vsc_py_os.getcwd()',
-            '__vsc_py_prev_argv = list(__vsc_py_sys.argv)',
-            '__vsc_py_added_path = False',
-            'try:',
-            '    __vsc_py_sys.argv = [__vsc_py_file]',
-            '    if not __vsc_py_sys.path or __vsc_py_sys.path[0] != __vsc_py_file_dir:',
-            '        __vsc_py_sys.path.insert(0, __vsc_py_file_dir)',
-            '        __vsc_py_added_path = True',
-            '    if __vsc_py_chdir:',
-            '        __vsc_py_os.chdir(__vsc_py_file_dir)',
-            "    __vsc_py_runpy.run_path(__vsc_py_file, run_name='__main__')",
-            'finally:',
-            '    __vsc_py_sys.argv = __vsc_py_prev_argv',
-            '    if __vsc_py_added_path and __vsc_py_sys.path and __vsc_py_sys.path[0] == __vsc_py_file_dir:',
-            '        __vsc_py_sys.path.pop(0)',
-            '    if __vsc_py_chdir:',
-            '        __vsc_py_os.chdir(__vsc_py_prev_cwd)',
-            '    del __vsc_py_file, __vsc_py_file_dir, __vsc_py_chdir, __vsc_py_prev_cwd, __vsc_py_prev_argv, __vsc_py_added_path',
-            '    del __vsc_py_os, __vsc_py_runpy, __vsc_py_sys',
-        ].join('\n');
+        // APK owns %run's namespace, import path and argv handling. -G keeps
+        // literal paths containing glob characters; -- ends option parsing.
+        const filePath = process.platform === 'win32' ? file.fsPath.replace(/\\/g, '/') : file.fsPath;
+        const quotedPath = process.platform === 'win32'
+            ? `"${filePath}"`
+            : `'${filePath.replace(/'/g, "'\\''")}'`;
+        return `%run -G -- ${quotedPath}`;
     }
 }

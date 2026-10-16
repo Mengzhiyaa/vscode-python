@@ -97,7 +97,7 @@ export class PythonForegroundSessionManager implements vscode.Disposable {
         existingForegroundSession: ILanguageRuntimeSession | undefined,
     ): Promise<void> {
         for (const session of existingSessions) {
-            if (!this.canActivateServices(session.state)) {
+            if (session.runtimeMetadata.languageId !== 'python' || !this.canActivateServices(session.state)) {
                 continue;
             }
 
@@ -121,10 +121,26 @@ export class PythonForegroundSessionManager implements vscode.Disposable {
             return;
         }
 
-        // Language contributions can be registered after Supervisor has already
-        // restored sessions and emitted its foreground-session event. In that case
-        // there is no event to replay and persisted workspace state can be stale.
-        // Match vscode-ark by falling back to the newest live console session.
+        const lastForegroundSessionId = this.getLastForegroundSessionId();
+        const lastForegroundSession = lastForegroundSessionId
+            ? this._registry.get(lastForegroundSessionId)
+            : undefined;
+        // Preserve this language's last foreground Console when another language
+        // is foreground, as Positron does. Keep an uninitialized restored session
+        // selected so its Ready event can activate LSP later.
+        if (
+            lastForegroundSession?.metadata.sessionMode === 'console' &&
+            lastForegroundSession.state !== RUNTIME_STATE_EXITED
+        ) {
+            await this.restoreForegroundConsoleSession(
+                lastForegroundSession,
+                'restored last foreground console session detected during startup',
+            );
+            return;
+        }
+
+        // Late registration may miss the foreground event. Fall back only when
+        // the saved Console is missing or has exited.
         const fallbackConsoleSession = existingSessions
             .filter(
                 (session) =>

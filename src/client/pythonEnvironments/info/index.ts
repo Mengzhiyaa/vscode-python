@@ -17,6 +17,7 @@ export enum EnvironmentType {
     Pipenv = 'PipEnv',
     Pyenv = 'Pyenv',
     Venv = 'Venv',
+    Uv = 'uv',
     MicrosoftStore = 'MicrosoftStore',
     Poetry = 'Poetry',
     Hatch = 'Hatch',
@@ -29,7 +30,7 @@ export enum EnvironmentType {
 /**
  * These envs are only created for a specific workspace, which we're able to detect.
  */
-export const workspaceVirtualEnvTypes = [EnvironmentType.Poetry, EnvironmentType.Pipenv, EnvironmentType.Pixi];
+export const workspaceVirtualEnvTypes = [EnvironmentType.Poetry, EnvironmentType.Pipenv, EnvironmentType.Pixi, EnvironmentType.Uv];
 
 export const virtualEnvTypes = [
     ...workspaceVirtualEnvTypes,
@@ -112,6 +113,9 @@ export function getEnvironmentTypeName(environmentType: EnvironmentType): string
         }
         case EnvironmentType.Venv: {
             return 'venv';
+        }
+        case EnvironmentType.Uv: {
+            return 'uv';
         }
         case EnvironmentType.VirtualEnv: {
             return 'virtualenv';

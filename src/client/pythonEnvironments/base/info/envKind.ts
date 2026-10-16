@@ -20,6 +20,7 @@ export function getKindDisplayName(kind: PythonEnvKind): string {
         [PythonEnvKind.Custom, 'custom'],
         // For now we treat OtherGlobal like Unknown.
         [PythonEnvKind.Venv, 'venv'],
+        [PythonEnvKind.Uv, 'uv'],
         [PythonEnvKind.VirtualEnv, 'virtualenv'],
         [PythonEnvKind.VirtualEnvWrapper, 'virtualenv'],
         [PythonEnvKind.Pipenv, 'Pipenv'],
@@ -64,6 +65,7 @@ export function getPrioritizedEnvKinds(): PythonEnvKind[] {
         PythonEnvKind.Pixi, // Placed here since Pixi environments are essentially Conda envs
         PythonEnvKind.Conda,
         PythonEnvKind.MicrosoftStore,
+        PythonEnvKind.Uv,
         PythonEnvKind.Pipenv,
         PythonEnvKind.Poetry,
         PythonEnvKind.Hatch,

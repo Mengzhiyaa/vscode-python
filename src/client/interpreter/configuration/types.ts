@@ -1,10 +1,10 @@
 import { ConfigurationTarget, Disposable, QuickPickItem, Uri } from 'vscode';
-import { Resource } from '../../common/types';
+import { Resource, InterpreterPathUpdateOptions } from '../../common/types';
 import { PythonEnvironment } from '../../pythonEnvironments/info';
 import { PythonExtension, ResolvedEnvironment } from '../../api/types';
 
 export interface IPythonPathUpdaterService {
-    updatePythonPath(pythonPath: string | undefined): Promise<void>;
+    updatePythonPath(pythonPath: string | undefined, options?: InterpreterPathUpdateOptions): Promise<void>;
 }
 
 export const IPythonPathUpdaterServiceFactory = Symbol('IPythonPathUpdaterServiceFactory');

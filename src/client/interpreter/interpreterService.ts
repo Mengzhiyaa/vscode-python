@@ -18,6 +18,7 @@ import {
     IDisposableRegistry,
     IInstaller,
     IInterpreterPathService,
+    InterpreterConfigurationScope,
     IPersistentState,
     IPersistentStateFactory,
     Product,
@@ -28,6 +29,7 @@ import {
     IActivatedEnvironmentLaunch,
     IComponentAdapter,
     GetActiveInterpreterOptions,
+    InterpreterChangeEvent,
     IInterpreterDisplay,
     IInterpreterService,
     IInterpreterStatusbarVisibilityFilter,
@@ -84,6 +86,9 @@ export class InterpreterService implements Disposable, IInterpreterService {
     public get onDidChangeInterpreter(): Event<Uri | undefined> {
         return this.didChangeInterpreterEmitter.event;
     }
+    public get onDidChangeInterpreterForSession(): Event<InterpreterChangeEvent> {
+        return this.didChangeInterpreterForSessionEmitter.event;
+    }
 
     public onDidChangeInterpreters: Event<PythonEnvironmentsChangedEvent>;
 
@@ -104,6 +109,9 @@ export class InterpreterService implements Disposable, IInterpreterService {
     private readonly interpreterPathService: IInterpreterPathService;
 
     private readonly didChangeInterpreterEmitter = new EventEmitter<Uri | undefined>();
+    private readonly didChangeInterpreterForSessionEmitter = new EventEmitter<InterpreterChangeEvent>();
+    private readonly pythonPathsByWorkspace = new Map<string, string>();
+    private readonly sessionIntentPathsByWorkspace = new Map<string, string>();
 
     private readonly didChangeInterpreterInformation = new EventEmitter<PythonEnvironment>();
 
@@ -204,7 +212,7 @@ export class InterpreterService implements Disposable, IInterpreterService {
                     for (const { path, workspaceFolder } of this.activeInterpreterPaths.values()) {
                         if (path === interpreter.path && !e.new) {
                             // If the active environment got deleted, notify it.
-                            this.didChangeInterpreterEmitter.fire(workspaceFolder?.uri);
+                            this.fireInterpreterChanged(workspaceFolder?.uri, false, 'active-env-deleted');
                             reportActiveInterpreterChanged({
                                 path,
                                 resource: workspaceFolder,
@@ -226,7 +234,7 @@ export class InterpreterService implements Disposable, IInterpreterService {
                 }
             }),
         );
-        disposables.push(this.interpreterPathService.onDidChange((i) => this._onConfigChanged(i.uri)));
+        disposables.push(this.interpreterPathService.onDidChange((scope) => this._onConfigChanged(scope)));
         // Auto-selection completes in the background (it is no longer awaited before activation),
         // which updates the python path setting once an interpreter is chosen. Re-run the config
         // change handler so the newly selected interpreter is reported to listeners (e.g. Pylance).
@@ -251,6 +259,7 @@ export class InterpreterService implements Disposable, IInterpreterService {
 
     public dispose(): void {
         this.didChangeInterpreterEmitter.dispose();
+        this.didChangeInterpreterForSessionEmitter.dispose();
         this.didChangeInterpreterInformation.dispose();
     }
 
@@ -369,7 +378,9 @@ export class InterpreterService implements Disposable, IInterpreterService {
         return this.pyenvs.getInterpreterDetails(pythonPath);
     }
 
-    public async _onConfigChanged(resource?: Uri): Promise<void> {
+    public async _onConfigChanged(scopeOrUri?: InterpreterConfigurationScope | Uri): Promise<void> {
+        const scope = scopeOrUri && 'configTarget' in scopeOrUri ? scopeOrUri : undefined;
+        const resource = scope ? scope.uri : scopeOrUri as Uri | undefined;
         // Check if we actually changed our python path.
         // Config service also updates itself on interpreter config change,
         // so yielding control here to make sure it goes first and updates
@@ -377,9 +388,14 @@ export class InterpreterService implements Disposable, IInterpreterService {
         await sleep(1);
         const pySettings = this.configService.getSettings(resource);
         this.didChangeInterpreterConfigurationEmitter.fire(resource);
-        if (this._pythonPathSetting === '' || this._pythonPathSetting !== pySettings.pythonPath) {
+        const workspaceKey = this.serviceContainer.get<IWorkspaceService>(IWorkspaceService)
+            .getWorkspaceFolderIdentifier(resource);
+        if (this.pythonPathsByWorkspace.get(workspaceKey) !== pySettings.pythonPath) {
+            this.pythonPathsByWorkspace.set(workspaceKey, pySettings.pythonPath);
+            this.sessionIntentPathsByWorkspace.delete(workspaceKey);
+            if (scope?.startSession) { this.sessionIntentPathsByWorkspace.set(workspaceKey, pySettings.pythonPath); }
             this._pythonPathSetting = pySettings.pythonPath;
-            this.didChangeInterpreterEmitter.fire(resource);
+            this.fireInterpreterChanged(resource, scope?.startSession ?? false, scope?.source ?? 'configuration-refresh');
             const workspaceFolder = this.serviceContainer
                 .get<IWorkspaceService>(IWorkspaceService)
                 .getWorkspaceFolder(resource);
@@ -387,14 +403,23 @@ export class InterpreterService implements Disposable, IInterpreterService {
                 path: pySettings.pythonPath,
                 resource: workspaceFolder,
             });
-            const workspaceKey = this.serviceContainer
-                .get<IWorkspaceService>(IWorkspaceService)
-                .getWorkspaceFolderIdentifier(resource);
             this.activeInterpreterPaths.set(workspaceKey, { path: pySettings.pythonPath, workspaceFolder });
             const interpreterDisplay = this.serviceContainer.get<IInterpreterDisplay>(IInterpreterDisplay);
             interpreterDisplay.refresh().catch((ex) => traceError('Python Extension: display.refresh', ex));
-            await this.ensureEnvironmentContainsPython(this._pythonPathSetting, workspaceFolder);
+            await this.ensureEnvironmentContainsPython(pySettings.pythonPath, workspaceFolder);
+        } else if (scope?.startSession === true &&
+            this.sessionIntentPathsByWorkspace.get(workspaceKey) !== pySettings.pythonPath) {
+            // A storage refresh may have observed this path before its explicit
+            // user-intent notification arrived. Do not lose that intent.
+            this.sessionIntentPathsByWorkspace.set(workspaceKey, pySettings.pythonPath);
+            this.didChangeInterpreterForSessionEmitter.fire({ resource, startSession: true,
+                source: scope.source ?? 'interpreter-path-update' });
         }
+    }
+
+    private fireInterpreterChanged(resource: Uri | undefined, startSession: boolean, source: string): void {
+        this.didChangeInterpreterEmitter.fire(resource);
+        this.didChangeInterpreterForSessionEmitter.fire({ resource, startSession, source });
     }
 
     @cache(-1, true)
@@ -420,7 +445,7 @@ export class InterpreterService implements Disposable, IInterpreterService {
                     // Fetch interpreter details so the cache is updated to include the newly installed Python.
                     await this.getInterpreterDetails(pythonPath);
                     // Fire an event as the executable for the environment has changed.
-                    this.didChangeInterpreterEmitter.fire(workspaceFolder?.uri);
+                    this.fireInterpreterChanged(workspaceFolder?.uri, false, 'install-complete');
                     reportActiveInterpreterChanged({
                         path: pythonPath,
                         resource: workspaceFolder,

@@ -1,21 +1,17 @@
 import { expect } from 'chai';
 import * as sinon from 'sinon';
-import * as TypeMoq from 'typemoq';
 import * as vscode from 'vscode';
 
-import { IConfigurationService } from '../../client/common/types';
-import { IServiceContainer } from '../../client/ioc/types';
 import { PythonConsoleExecutionService } from '../../client/supervisor/pythonConsoleExecutionService';
 import { PythonConsoleRuntimeRouter } from '../../client/supervisor/pythonConsoleRuntimeRouter';
 import { PYTHON_LANGUAGE_ID } from '../../client/supervisor/runtimeProvider';
 import type { IPositronConsoleService } from '../../client/supervisor/types/supervisor-api';
-import { ICodeExecutionHelper } from '../../client/terminals/types';
+import { UnsavedScriptFiles } from '../../client/supervisor/unsavedScriptFiles';
 
 suite('Python Supervisor - Console Execution Service', () => {
     let service: PythonConsoleExecutionService;
-    let serviceContainer: TypeMoq.IMock<IServiceContainer>;
-    let codeExecutionHelper: TypeMoq.IMock<ICodeExecutionHelper>;
-    let configurationService: TypeMoq.IMock<IConfigurationService>;
+    let openDocument: sinon.SinonStub;
+    let unsavedScripts: UnsavedScriptFiles;
     let runtimeRouter: {
         ensureConsoleSession: sinon.SinonStub;
         getLiveConsoleSession: sinon.SinonStub;
@@ -26,9 +22,14 @@ suite('Python Supervisor - Console Execution Service', () => {
     let originalShowWarningMessage: unknown;
 
     setup(() => {
-        serviceContainer = TypeMoq.Mock.ofType<IServiceContainer>();
-        codeExecutionHelper = TypeMoq.Mock.ofType<ICodeExecutionHelper>();
-        configurationService = TypeMoq.Mock.ofType<IConfigurationService>();
+        openDocument = sinon.stub(vscode.workspace, 'openTextDocument').resolves({
+            uri: vscode.Uri.file('/tmp/test.py'), isUntitled: false, isDirty: false,
+        } as vscode.TextDocument);
+        unsavedScripts = new UnsavedScriptFiles();
+        sinon.stub(unsavedScripts, 'write').resolves('/tmp/scratch.py');
+        sinon.stub(unsavedScripts, 'watchExecution');
+        sinon.stub(unsavedScripts, 'finished').resolves();
+        sinon.stub(unsavedScripts, 'dispose');
         runtimeRouter = {
             ensureConsoleSession: sinon.stub().resolves({
                 sessionId: 'session-1',
@@ -41,42 +42,29 @@ suite('Python Supervisor - Console Execution Service', () => {
             executeCode: executeCodeStub,
         } as unknown) as IPositronConsoleService;
 
-        serviceContainer
-            .setup((container) => container.get(TypeMoq.It.isValue(ICodeExecutionHelper)))
-            .returns(() => codeExecutionHelper.object);
-        serviceContainer
-            .setup((container) => container.get(TypeMoq.It.isValue(IConfigurationService)))
-            .returns(() => configurationService.object);
-        configurationService
-            .setup((config) => config.getSettings(TypeMoq.It.isAny()))
-            .returns(() => ({ terminal: { executeInFileDir: true } } as any));
-
         service = new PythonConsoleExecutionService(
             (runtimeRouter as unknown) as PythonConsoleRuntimeRouter,
-            serviceContainer.object,
             positronConsoleService,
+            unsavedScripts,
         );
         originalExecuteCommand = (vscode.commands as any).executeCommand;
         originalShowWarningMessage = (vscode.window as any).showWarningMessage;
     });
 
     teardown(() => {
+        service.dispose();
         (vscode.commands as any).executeCommand = originalExecuteCommand;
         (vscode.window as any).showWarningMessage = originalShowWarningMessage;
         sinon.restore();
     });
 
-    test('executes a file through the supervisor console with runpy bootstrap code', async () => {
+    test('runs a saved script with the kernel run magic and preserves editor focus', async () => {
         const file = vscode.Uri.file('/tmp/test file.py');
-
-        codeExecutionHelper
-            .setup((helper) => helper.saveFileIfDirty(TypeMoq.It.isValue(file)))
-            .returns(() => Promise.resolve(undefined));
+        openDocument.resolves({ uri: file, isUntitled: false, isDirty: false } as vscode.TextDocument);
 
         await service.executeFile('python.execInConsole', file);
 
-        codeExecutionHelper.verify((helper) => helper.getFileToExecute(), TypeMoq.Times.never());
-        sinon.assert.calledOnceWithExactly(runtimeRouter.ensureConsoleSession, 'python.execInConsole', file, true);
+        sinon.assert.calledOnceWithExactly(runtimeRouter.ensureConsoleSession, 'python.execInConsole', file, false);
 
         const [
             languageId,
@@ -94,21 +82,65 @@ suite('Python Supervisor - Console Execution Service', () => {
 
         expect(languageId).to.equal(PYTHON_LANGUAGE_ID);
         expect(sessionId).to.equal('session-1');
-        expect(code).to.include('runpy.run_path');
-        expect(code).to.include('__vsc_py_chdir = True');
-        expect(code).to.include(JSON.stringify(file.fsPath));
+        expect(code).to.equal(process.platform === 'win32'
+            ? `%run -G -- "${file.fsPath.replace(/\\/g, '/')}"`
+            : `%run -G -- '${file.fsPath}'`);
         expect(attribution).to.deep.include({
             source: 'python.execInConsole',
             fileUri: file,
             lineNumber: 1,
         });
-        expect(focus).to.equal(true);
-        expect(allowIncomplete).to.equal(undefined);
+        expect(focus).to.equal(false);
+        expect(allowIncomplete).to.equal(true);
         expect(mode).to.equal(undefined);
         expect(errorBehavior).to.equal(undefined);
         expect(executionId).to.equal(undefined);
         expect(documentUri).to.equal(file);
         expect(executionMetadata).to.deep.equal({ executionTarget: 'file' });
+    });
+
+    test('runs files in the live console without resolving or selecting another interpreter', async () => {
+        runtimeRouter.getLiveConsoleSession.returns({ sessionId: 'session-2' });
+        await service.executeFile('python.execInConsole', vscode.Uri.file('/tmp/test.py'));
+        sinon.assert.notCalled(runtimeRouter.ensureConsoleSession);
+        expect(executeCodeStub.firstCall.args[1]).to.equal('session-2');
+    });
+
+    test('keeps an untitled snapshot until its execution completes rather than merely being enqueued', async () => {
+        const file = vscode.Uri.parse('untitled:Untitled-1');
+        const document = { uri: file, isUntitled: true, isDirty: true } as vscode.TextDocument;
+        const session = { sessionId: 'session-2' };
+        openDocument.resolves(document);
+        runtimeRouter.getLiveConsoleSession.returns(session);
+        await service.executeFile('python.execInConsole', file);
+        const executionId = executeCodeStub.firstCall.args[8];
+        expect(executionId).to.be.a('string');
+        sinon.assert.calledOnceWithExactly(unsavedScripts.write as sinon.SinonStub, document);
+        sinon.assert.calledOnceWithExactly(unsavedScripts.watchExecution as sinon.SinonStub,
+            '/tmp/scratch.py', session, executionId);
+        sinon.assert.notCalled(unsavedScripts.finished as sinon.SinonStub);
+        expect(executeCodeStub.firstCall.args[3].fileUri).to.equal(file);
+    });
+
+    test('cleans an untitled snapshot if enqueueing fails', async () => {
+        openDocument.resolves({ uri: vscode.Uri.parse('untitled:Untitled-1'), isUntitled: true } as vscode.TextDocument);
+        runtimeRouter.getLiveConsoleSession.returns({ sessionId: 'session-2' });
+        const error = new Error('enqueue failed');
+        executeCodeStub.rejects(error);
+        let failure: unknown;
+        await service.executeFile('python.execInConsole', vscode.Uri.parse('untitled:Untitled-1'))
+            .catch((value) => { failure = value; });
+        expect(failure).to.equal(error);
+        sinon.assert.calledOnceWithExactly(unsavedScripts.finished as sinon.SinonStub, '/tmp/scratch.py');
+    });
+
+    test('does not run stale file contents after saving is cancelled', async () => {
+        const file = vscode.Uri.file('/tmp/test.py');
+        openDocument.resolves({ uri: file, isUntitled: false, isDirty: true,
+            save: sinon.stub().resolves(false) } as unknown as vscode.TextDocument);
+        await service.executeFile('python.execInConsole', file);
+        sinon.assert.notCalled(executeCodeStub);
+        sinon.assert.notCalled(runtimeRouter.ensureConsoleSession);
     });
 
     test('executes selection commands after ensuring a supervisor console session when no console is live', async () => {
@@ -177,9 +209,6 @@ suite('Python Supervisor - Console Execution Service', () => {
         (vscode.window as any).showWarningMessage = warningStub;
 
         runtimeRouter.ensureConsoleSession.resolves(undefined);
-        codeExecutionHelper
-            .setup((helper) => helper.saveFileIfDirty(TypeMoq.It.isValue(file)))
-            .returns(() => Promise.resolve(undefined));
 
         await service.executeFile('python.execInConsole', file);
 

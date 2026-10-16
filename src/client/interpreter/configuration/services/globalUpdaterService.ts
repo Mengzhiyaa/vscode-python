@@ -1,15 +1,15 @@
 import { ConfigurationTarget } from 'vscode';
-import { IInterpreterPathService } from '../../../common/types';
+import { IInterpreterPathService, InterpreterPathUpdateOptions } from '../../../common/types';
 import { IPythonPathUpdaterService } from '../types';
 
 export class GlobalPythonPathUpdaterService implements IPythonPathUpdaterService {
     constructor(private readonly interpreterPathService: IInterpreterPathService) {}
-    public async updatePythonPath(pythonPath: string | undefined): Promise<void> {
+    public async updatePythonPath(pythonPath: string | undefined, options?: InterpreterPathUpdateOptions): Promise<void> {
         const pythonPathValue = this.interpreterPathService.inspect(undefined);
 
         if (pythonPathValue && pythonPathValue.globalValue === pythonPath) {
             return;
         }
-        await this.interpreterPathService.update(undefined, ConfigurationTarget.Global, pythonPath);
+        await this.interpreterPathService.update(undefined, ConfigurationTarget.Global, pythonPath, options);
     }
 }

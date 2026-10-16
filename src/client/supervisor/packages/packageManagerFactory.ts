@@ -8,6 +8,7 @@ import { PythonRuntimeInstallation } from '../runtimeProvider';
 import type { ILanguageRuntimePackageManager, ILanguageRuntimeSession } from '../types/supervisor-api';
 import { CondaPackageManager } from './condaPackageManager';
 import { PipPackageManager } from './pipPackageManager';
+import { UvPackageManager } from './uvPackageManager';
 
 export class PackageManagerFactory {
     static create(
@@ -16,6 +17,9 @@ export class PackageManagerFactory {
         session: ILanguageRuntimeSession,
         logChannel: vscode.LogOutputChannel,
     ): ILanguageRuntimePackageManager {
+        if (installation.envType === EnvironmentType.Uv) {
+            return new UvPackageManager(installation.pythonPath, serviceContainer, session, logChannel);
+        }
         if (installation.envType === EnvironmentType.Conda) {
             return new CondaPackageManager(installation, serviceContainer, session, logChannel);
         }

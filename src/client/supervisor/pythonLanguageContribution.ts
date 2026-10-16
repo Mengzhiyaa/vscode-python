@@ -1,8 +1,9 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
 import { Commands } from '../common/constants';
-import { IInterpreterService } from '../interpreter/contracts';
+import { IInterpreterService, type PythonEnvironmentsChangedEvent } from '../interpreter/contracts';
 import { IServiceContainer } from '../ioc/types';
-import { PythonEnvironment } from '../pythonEnvironments/info';
 import { PythonConsoleExecutionService } from './pythonConsoleExecutionService';
 import { PythonConsoleRuntimeRouter } from './pythonConsoleRuntimeRouter';
 import { PythonForegroundSessionManager } from './pythonForegroundSessionManager';
@@ -29,30 +30,35 @@ export const PYTHON_EXECUTE_IN_SUPERVISOR_WITHOUT_ADVANCING_COMMAND =
 
 class PythonSupervisorController implements vscode.Disposable {
     private readonly _disposables: vscode.Disposable[] = [];
+    private _interpreterChangeQueue: Promise<void> = Promise.resolve();
+    private _selectionQueue: Promise<void> = Promise.resolve();
+    private readonly _pendingShutdowns = new Map<string, Promise<void>>();
+    private _disposed = false;
 
     constructor(
         private readonly _runtimeRouter: PythonConsoleRuntimeRouter,
         private readonly _runtimeProvider: PythonRuntimeProvider,
-        interpreterService: IInterpreterService,
+        private readonly interpreterService: IInterpreterService,
         private readonly _services: ILanguageContributionServices,
         private readonly _consoleExecutionService: PythonConsoleExecutionService,
     ) {
         this._disposables.push(
-            interpreterService.onDidChangeInterpreter((workspaceUri) => {
-                void this._runtimeRouter.syncActiveInterpreter('Python interpreter changed', workspaceUri);
-            }),
-            interpreterService.onDidChangeInterpreterConfiguration((workspaceUri) => {
-                void this._runtimeRouter.syncActiveInterpreter(
-                    'Python interpreter configuration changed',
-                    workspaceUri,
-                );
+            interpreterService.onDidChangeInterpreterForSession?.(event => {
+                this._selectionQueue = this._selectionQueue.then(async () => {
+                    if (!this._disposed) {
+                        await this._runtimeRouter.syncActiveInterpreter(event.source, event.resource, event.startSession);
+                    }
+                }).catch(error => this._services.logChannel.warn(`Failed to synchronize Python interpreter: ${error}`));
+            }) ?? interpreterService.onDidChangeInterpreter(resource => {
+                // Compatibility with older interpreter services: an unclassified
+                // event updates discovery, without implying session intent.
+                void this._runtimeRouter.syncActiveInterpreter('Python interpreter refresh', resource, false)
+                    .catch(error => this._services.logChannel.warn(String(error)));
             }),
             interpreterService.onDidChangeInterpreters((event) => {
-                if (!event.new) {
-                    return;
-                }
-
-                void this.registerInterpreter(event.new, 'Python interpreter discovered');
+                this._interpreterChangeQueue = this._interpreterChangeQueue.then(async () => {
+                    if (!this._disposed) { await this.handleInterpreterChange(event); }
+                }).catch(error => this._services.logChannel.warn(`Failed to update Python runtimes: ${error}`));
             }),
             this.registerCommand(PYTHON_START_SUPERVISOR_CONSOLE_COMMAND, () => this.startConsole()),
             this.registerCommand(PYTHON_SELECT_SUPERVISOR_RUNTIME_COMMAND, () => this.selectRuntime()),
@@ -83,11 +89,13 @@ class PythonSupervisorController implements vscode.Disposable {
 
     async initialize(): Promise<void> {
         await this._runtimeProvider.triggerInterpreterRefresh(this._services.logChannel);
-        await this._runtimeRouter.syncActiveInterpreter('Python supervisor activation');
+        await this._runtimeRouter.syncActiveInterpreter('Python supervisor activation', undefined, false);
     }
 
     dispose(): void {
+        this._disposed = true;
         this._disposables.forEach((disposable) => disposable.dispose());
+        this._consoleExecutionService.dispose();
     }
 
     private async startConsole(): Promise<void> {
@@ -198,12 +206,64 @@ class PythonSupervisorController implements vscode.Disposable {
         await this._services.runtimeSessionService.deleteSession(session.sessionId);
     }
 
-    private async registerInterpreter(interpreter: PythonEnvironment, source: string): Promise<void> {
-        const installation = this._runtimeRouter.installationFromInterpreter(interpreter);
-        this._runtimeRouter.registerInstallation(installation);
-        if (this._runtimeRouter.isActiveInstallation(installation)) {
-            await this._runtimeRouter.syncActiveInterpreter(source);
+    private async handleInterpreterChange(event: PythonEnvironmentsChangedEvent): Promise<void> {
+        const samePath = (left: string, right: string) => process.platform === 'win32'
+            ? path.normalize(left).toLowerCase() === path.normalize(right).toLowerCase()
+            : path.normalize(left) === path.normalize(right);
+        if (event.old && !event.new) {
+            const current = fs.existsSync(event.old.path)
+                ? await this.interpreterService.getInterpreterDetails(event.old.path) : undefined;
+            if (this._disposed) { return; }
+            if (current) {
+                const installation = this._runtimeRouter.installationFromInterpreter(current);
+                const metadata = this._runtimeRouter.registerInstallation(installation);
+                await this.shutdownSessionsForPath(event.old.path, metadata.runtimeId);
+            } else {
+                this._runtimeProvider.removeRuntimeForPath(event.old.path);
+                await this.shutdownSessionsForPath(event.old.path);
+            }
+            return;
         }
+        if (!event.new) { return; }
+        if (event.old && !samePath(event.old.path, event.new.path)) {
+            this._runtimeProvider.removeRuntimeForPath(event.old.path);
+        } else if (event.old && event.old.version?.major === event.new.version?.major &&
+            event.old.version?.minor === event.new.version?.minor) {
+            return;
+        }
+        // Discovery may report a version from pyvenv.cfg. Resolve the executable
+        // again so a replacement is registered with its current runtime metadata.
+        const interpreter = await this.interpreterService.getInterpreterDetails(event.new.path);
+        if (!interpreter || this._disposed) { return; }
+        const installation = this._runtimeRouter.installationFromInterpreter(interpreter);
+        const metadata = this._runtimeRouter.registerInstallation(installation);
+        if (event.old && samePath(event.old.path, event.new.path)) {
+            await this.shutdownSessionsForPath(event.old.path, metadata.runtimeId);
+        }
+    }
+
+    private async shutdownSessionsForPath(pythonPath: string, keepRuntimeId?: string): Promise<void> {
+        const normalize = (value: string) => process.platform === 'win32' ? path.normalize(value).toLowerCase() : path.normalize(value);
+        await Promise.all(this._services.runtimeSessionService.activeSessions.filter(session =>
+            session.runtimeMetadata.languageId === 'python' && session.metadata.sessionMode === 'console' &&
+            normalize(session.runtimeMetadata.runtimePath) === normalize(pythonPath) &&
+            session.runtimeMetadata.runtimeId !== keepRuntimeId && String(session.state) !== 'exited',
+        ).map(session => {
+            const pending = this._pendingShutdowns.get(session.sessionId);
+            if (pending) { return pending; }
+            const ended = session.onDidEndSession(() => {
+                ended.dispose();
+                this._pendingShutdowns.delete(session.sessionId);
+            });
+            this._disposables.push(ended);
+            const request = Promise.resolve().then(() => session.shutdown()).catch(error => {
+                ended.dispose();
+                this._pendingShutdowns.delete(session.sessionId);
+                throw error;
+            });
+            this._pendingShutdowns.set(session.sessionId, request);
+            return request;
+        }));
     }
 
     private getExecutionResource(resource?: vscode.Uri): vscode.Uri | undefined {
@@ -314,7 +374,6 @@ export class PythonLanguageContribution {
         const runtimeRouter = this.getRuntimeRouter(services);
         const consoleExecutionService = new PythonConsoleExecutionService(
             runtimeRouter,
-            this._serviceContainer,
             services.positronConsoleService,
         );
         const controller = new PythonSupervisorController(
